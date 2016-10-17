@@ -9,11 +9,26 @@
     real sigma = sigmaEpsilon1.x + sigmaEpsilon2.x;
 #elif SIGMA_COMBINING_RULE == 2
     real sigma = 2*SQRT(sigmaEpsilon1.x*sigmaEpsilon2.x);
-#else
+#elif SIGMA_COMBINING_RULE == 3
     real sigma1_2 = sigmaEpsilon1.x*sigmaEpsilon1.x;
     real sigma2_2 = sigmaEpsilon2.x*sigmaEpsilon2.x;
     real sigmasum = sigma1_2+sigma2_2;
     real sigma = (sigmasum == 0.0f ? (real) 0 : 2*(sigmaEpsilon1.x*sigma1_2 + sigmaEpsilon2.x*sigma2_2)/(sigma1_2+sigma2_2));
+#else
+    bool haveDonor = false;
+    real sigma1 = sigmaEpsilon1.x;
+    if (sigma1 < 0.0f) {
+        haveDonor = true;
+        sigma1 = -sigma1;
+    }
+    real sigma2 = sigmaEpsilon2.x;
+    if (sigma2 < 0.0f) {
+        haveDonor = true;
+        sigma2 = -sigma2;
+    }
+    real gamma = (sigma1 - sigma2) / (sigma1 + sigma2);
+    real sigma = 0.5f * (sigma1 + sigma2) * (1.0f + (haveDonor
+                 ? 0.0f : 0.2f * (1.0f - exp(-12.0 * gamma * gamma))));
 #endif
 #if EPSILON_COMBINING_RULE == 1
     real epsilon = 0.5f*(sigmaEpsilon1.y + sigmaEpsilon2.y);
@@ -22,9 +37,25 @@
 #elif EPSILON_COMBINING_RULE == 3
     real epssum = sigmaEpsilon1.y+sigmaEpsilon2.y;
     real epsilon = (epssum == 0.0f ? (real) 0 : 2*(sigmaEpsilon1.y*sigmaEpsilon2.y)/(sigmaEpsilon1.y+sigmaEpsilon2.y));
-#else
+#elif EPSILON_COMBINING_RULE == 4
     real epsilon_s = SQRT(sigmaEpsilon1.y) + SQRT(sigmaEpsilon2.y);
     real epsilon = (epsilon_s == 0.0f ? (real) 0 : 4*sigmaEpsilon1.y*sigmaEpsilon2.y/(epsilon_s*epsilon_s));
+#else
+    real sigmaSq = sigma * sigma;
+    const real c4 = 757.97344f;
+    real epsilon = c4 * bondReductionFactors1 * bondReductionFactors2
+                   / ((sqrt(sigmaEpsilon1.y) + sqrt(sigmaEpsilon2.y)) * sigmaSq * sigmaSq * sigmaSq);
+#endif
+#if SIGMA_COMBINING_RULE == 4
+#if EPSILON_COMBINING_RULE == 5
+    const real DARAD = 0.8;
+    const real DAEPS = 0.5;
+    if (((sigmaEpsilon1.x < 0.0f) && (sigmaEpsilon2.x > 0.0f) && (sigmaEpsilon2.y < 0.0f))
+        || ((sigmaEpsilon2.x < 0.0f) && (sigmaEpsilon1.x > 0.0f) && (sigmaEpsilon1.y < 0.0f))) {
+        sigma *= DARAD;
+        epsilon *= DAEPS;
+    }
+#endif
 #endif
     real r6 = r2*r2*r2;
     real r7 = r6*r;

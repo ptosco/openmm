@@ -248,12 +248,16 @@ private:
     RealOpenMM arithmeticSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
     RealOpenMM  geometricSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
     RealOpenMM  cubicMeanSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
+    RealOpenMM  mmffSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
 
     CombiningFunction _combineEpsilons;
     RealOpenMM arithmeticEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
     RealOpenMM  geometricEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    RealOpenMM  harmonicEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    RealOpenMM  hhgEpsilonCombiningRule(     RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
+    RealOpenMM   harmonicEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
+    RealOpenMM        hhgEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
+    RealOpenMM       mmffEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
+    static RealOpenMM mmffEpsilonCombiningRuleHelper(RealOpenMM combinedSigma,
+        RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ, RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ);
 
     /**---------------------------------------------------------------------------------------
     

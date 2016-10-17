@@ -8,11 +8,16 @@ extern "C" __global__ void prepareToComputeForce(unsigned long long* __restrict_
         forceBuffers[atom+PADDED_NUM_ATOMS] = 0;
         forceBuffers[atom+PADDED_NUM_ATOMS*2] = 0;
         real4 pos1 = tempPosq[atom];
-        real4 pos2 = tempPosq[bondReductionAtoms[atom]];
-        real factor = (real) bondReductionFactors[atom];
-        posq[atom] = make_real4(factor*pos1.x + (1-factor)*pos2.x,
-                                    factor*pos1.y + (1-factor)*pos2.y,
-                                    factor*pos1.z + (1-factor)*pos2.z, pos1.w);
+        if (bondReductionAtoms[atom] == atom) {
+            posq[atom] = make_real4(pos1.x, pos1.y, pos1.z, pos1.w);
+        }
+        else {
+            real4 pos2 = tempPosq[bondReductionAtoms[atom]];
+            real factor = (real) bondReductionFactors[atom];
+            posq[atom] = make_real4(factor*pos1.x + (1-factor)*pos2.x,
+                                        factor*pos1.y + (1-factor)*pos2.y,
+                                        factor*pos1.z + (1-factor)*pos2.z, pos1.w);
+        }
     }
 }
 

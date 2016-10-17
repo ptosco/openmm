@@ -93,6 +93,8 @@ void AmoebaReferenceVdwForce::setSigmaCombiningRule(const std::string& sigmaComb
         _combineSigmas = &AmoebaReferenceVdwForce::geometricSigmaCombiningRule;
     } else if (_sigmaCombiningRule == "CUBIC-MEAN") {
         _combineSigmas = &AmoebaReferenceVdwForce::cubicMeanSigmaCombiningRule;
+    } else if (_sigmaCombiningRule == "MMFF") {
+        _combineSigmas = &AmoebaReferenceVdwForce::mmffSigmaCombiningRule;
     } else {
         _combineSigmas = &AmoebaReferenceVdwForce::arithmeticSigmaCombiningRule;
     }
@@ -120,6 +122,27 @@ RealOpenMM AmoebaReferenceVdwForce::cubicMeanSigmaCombiningRule(RealOpenMM sigma
     return sigmaI != zero && sigmaJ != 0.0 ? 2.0*(sigmaI2*sigmaI + sigmaJ2*sigmaJ)/(sigmaI2 + sigmaJ2) : zero;
 }
 
+RealOpenMM AmoebaReferenceVdwForce::mmffSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const {
+
+    static const RealOpenMM zero = 0.0;
+    static const RealOpenMM one = 1.0;
+    static const RealOpenMM oneHalf = 0.5;
+    static const RealOpenMM B = 0.2;
+    static const RealOpenMM Beta = 12.0;
+    bool haveDonor = false;
+    if (sigmaI < zero) {
+        sigmaI = -sigmaI;
+        haveDonor = true;
+    }
+    if (sigmaJ < zero) {
+        sigmaJ = -sigmaJ;
+        haveDonor = true;
+    }
+    RealOpenMM gammaIJ = (sigmaI - sigmaJ) / (sigmaI + sigmaJ);
+    return (oneHalf * (sigmaI + sigmaJ) * (one + (haveDonor
+            ? zero : B * (one - exp(-Beta * gammaIJ * gammaIJ)))));
+}
+
 void AmoebaReferenceVdwForce::setEpsilonCombiningRule(const std::string& epsilonCombiningRule) {
 
     _epsilonCombiningRule = epsilonCombiningRule;
@@ -133,6 +156,8 @@ void AmoebaReferenceVdwForce::setEpsilonCombiningRule(const std::string& epsilon
          _combineEpsilons = &AmoebaReferenceVdwForce::harmonicEpsilonCombiningRule;
     } else if (_epsilonCombiningRule == "HHG") {
          _combineEpsilons = &AmoebaReferenceVdwForce::hhgEpsilonCombiningRule;
+    } else if (_epsilonCombiningRule == "MMFF") {
+         _combineEpsilons = &AmoebaReferenceVdwForce::mmffEpsilonCombiningRule;
     } else {
          _combineEpsilons = &AmoebaReferenceVdwForce::geometricEpsilonCombiningRule;
     }
@@ -157,6 +182,19 @@ RealOpenMM AmoebaReferenceVdwForce::harmonicEpsilonCombiningRule(RealOpenMM epsi
 RealOpenMM AmoebaReferenceVdwForce::hhgEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
     RealOpenMM denominator = SQRT(epsilonI) + SQRT(epsilonJ);
     return (epsilonI != 0.0 && epsilonJ != 0.0) ? 4.0*(epsilonI*epsilonJ)/(denominator*denominator) : 0.0;
+}
+
+RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
+}
+
+RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper(RealOpenMM combinedSigma,
+    RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ, RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ) {
+    RealOpenMM combinedSigma2 = combinedSigma * combinedSigma;
+    // 181.16 * OpenMM::KJPerKcal = 757.97344
+    static const RealOpenMM c4 = 757.97344;
+
+    return c4 * GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
+           combinedSigma2 * combinedSigma2 * combinedSigma2);
 }
 
 void AmoebaReferenceVdwForce::addReducedForce(unsigned int particleI, unsigned int particleIV,
@@ -282,6 +320,16 @@ RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
     static const RealOpenMM two           = 2.0;
 
     // ---------------------------------------------------------------------------------------
+                                                                
+    // MMFF rules:
+    // combinedSigma is equivalent to R_star_ij
+    // the sigmas array should be initialized with R_star for each particle
+    // the epsilons array should be initialized with alpha_i/N_i for each particle
+    // the reductions array should be initialized with gamma_i*alpha_i for each particle
+    // the signs matter:
+    // - if sigma > 0.0 and epsilon > 0.0, then the particle is neither a donor nor an acceptor
+    // - if sigma > 0.0 and epsilon < 0.0, then the particle is an acceptor
+    // - if sigma < 0.0, then the particle is a donor
 
     // set reduced coordinates
 
@@ -310,8 +358,23 @@ RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
         for (unsigned int jj = ii+1; jj < static_cast<unsigned int>(numParticles); jj++) {
             if (exclusions[jj] == 0) {
 
-                RealOpenMM combinedSigma   = (this->*_combineSigmas)(sigmaI, sigmas[jj]);
-                RealOpenMM combinedEpsilon = (this->*_combineEpsilons)(epsilonI, epsilons[jj]);
+                RealOpenMM sigmaJ      = sigmas[jj];
+                RealOpenMM epsilonJ    = epsilons[jj];
+                RealOpenMM combinedSigma   = (this->*_combineSigmas)(sigmaI, sigmaJ);
+                RealOpenMM combinedEpsilon = (this->_combineEpsilons == &AmoebaReferenceVdwForce::mmffEpsilonCombiningRule)
+                                             ? mmffEpsilonCombiningRuleHelper(combinedSigma, epsilonI, epsilonJ, reductions[ii], reductions[jj])
+                                             : (this->*_combineEpsilons)(epsilonI, epsilonJ);
+                
+                // in MMFF, if one of the particles is an acceptor and the other one is a donor,
+                // then we want to scale sigma and epsilon
+                if ((this->_combineSigmas == &AmoebaReferenceVdwForce::mmffSigmaCombiningRule)
+                    && (((sigmas[ii] < zero) && (sigmas[jj] > zero) && (epsilons[jj] < zero))
+                    || ((sigmas[jj] < zero) && (sigmas[ii] > zero) && (epsilons[ii] < zero)))) {
+                    static const RealOpenMM DARAD = 0.8;
+                    combinedSigma *= DARAD;
+                    static const RealOpenMM DAEPS = 0.5;
+                    combinedEpsilon *= DAEPS;
+                }
 
                 Vec3 force;
                 energy                     += calculatePairIxn(combinedSigma, combinedEpsilon,
