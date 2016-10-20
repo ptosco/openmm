@@ -102,7 +102,7 @@ static lbfgsfloatval_t evaluate(void *instance, const lbfgsfloatval_t *x, lbfgsf
     return energy;
 }
 
-void LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxIterations) {
+int LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxIterations) {
     const System& system = context.getSystem();
     int numParticles = system.getNumParticles();
     lbfgsfloatval_t *x = lbfgs_malloc(numParticles*3);
@@ -142,12 +142,13 @@ void LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxI
     // Repeatedly minimize, steadily increasing the strength of the springs until all constraints are satisfied.
 
     double prevMaxError = 1e10;
+    int ret = 0;
     while (true) {
         // Perform the minimization.
 
         lbfgsfloatval_t fx;
         MinimizerData data(context, k);
-        lbfgs(numParticles*3, x, &fx, evaluate, NULL, &data, &param);
+        ret = lbfgs(numParticles*3, x, &fx, evaluate, NULL, &data, &param);
 
         // Check whether all constraints are satisfied.
 
@@ -189,5 +190,6 @@ void LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxI
     
     if (constraintTol < workingConstraintTol)
         context.applyConstraints(workingConstraintTol);
+    return ret;
 }
 
