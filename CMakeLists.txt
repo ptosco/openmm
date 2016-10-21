@@ -182,10 +182,13 @@ SET(OPENMM_COPYRIGHT_YEARS "2008-2015")
 # underbar separated list of dotted authors, no spaces or commas
 SET(OPENMM_AUTHORS "Peter.Eastman")
 
+string(REGEX REPLACE "\\\\" "\\\\\\\\" OPENMM_INSTALL_PREFIX_ESCAPED ${OPENMM_INSTALL_PREFIX})
+
 ADD_DEFINITIONS(-DOPENMM_LIBRARY_NAME=${OPENMM_LIBRARY_NAME}
                 -DOPENMM_MAJOR_VERSION=${OPENMM_MAJOR_VERSION}
                 -DOPENMM_MINOR_VERSION=${OPENMM_MINOR_VERSION}
-                -DOPENMM_BUILD_VERSION=${OPENMM_BUILD_VERSION})
+                -DOPENMM_BUILD_VERSION=${OPENMM_BUILD_VERSION}
+                -DOPENMM_INSTALL_PREFIX=${OPENMM_INSTALL_PREFIX_ESCAPED})
 
 # CMake quotes automatically when building Visual Studio projects but we need
 # to add them ourselves for Linux or Cygwin. Two cases to avoid duplicate quotes
