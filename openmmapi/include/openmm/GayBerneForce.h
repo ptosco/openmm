@@ -289,7 +289,7 @@ public:
         sigma = epsilon = sx = sy = sz = ex = ey = ez = 0.0;
     }
     ParticleInfo(double sigma, double epsilon, int xparticle, int yparticle, double sx, double sy, double sz, double ex, double ey, double ez) :
-        sigma(sigma), epsilon(epsilon), xparticle(xparticle), yparticle(yparticle), sx(sx), sy(sy), sz(sz), ex(ex), ey(ey), ez(ez) {
+        xparticle(xparticle), yparticle(yparticle), sigma(sigma), epsilon(epsilon), sx(sx), sy(sy), sz(sz), ex(ex), ey(ey), ez(ez) {
     }
 };
 
