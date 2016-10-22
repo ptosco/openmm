@@ -41,20 +41,27 @@
     real epsilon_s = SQRT(sigmaEpsilon1.y) + SQRT(sigmaEpsilon2.y);
     real epsilon = (epsilon_s == 0.0f ? (real) 0 : 4*sigmaEpsilon1.y*sigmaEpsilon2.y/(epsilon_s*epsilon_s));
 #else
+    real epsilon1 = ((sigmaEpsilon1.y < 0.0f) ? -sigmaEpsilon1.y : sigmaEpsilon1.y);
+    real epsilon2 = ((sigmaEpsilon2.y < 0.0f) ? -sigmaEpsilon2.y : sigmaEpsilon2.y);
     real sigmaSq = sigma * sigma;
-    const real c4 = 757.97344f;
+    const real c4 = 7.5797344e-4f;
     real epsilon = c4 * bondReductionFactors1 * bondReductionFactors2
-                   / ((sqrt(sigmaEpsilon1.y) + sqrt(sigmaEpsilon2.y)) * sigmaSq * sigmaSq * sigmaSq);
+                   / ((sqrt(epsilon1) + sqrt(epsilon2)) * sigmaSq * sigmaSq * sigmaSq);
 #endif
 #if SIGMA_COMBINING_RULE == 4
 #if EPSILON_COMBINING_RULE == 5
     const real DARAD = 0.8;
     const real DAEPS = 0.5;
+    bool sc = false;
     if (((sigmaEpsilon1.x < 0.0f) && (sigmaEpsilon2.x > 0.0f) && (sigmaEpsilon2.y < 0.0f))
         || ((sigmaEpsilon2.x < 0.0f) && (sigmaEpsilon1.x > 0.0f) && (sigmaEpsilon1.y < 0.0f))) {
+        sc = true;
         sigma *= DARAD;
         epsilon *= DAEPS;
     }
+#if 0
+    printf("GIaI=%f,GJaJ=%f,aI/NI=%f,aJ/NJ=%f,s1=%f,s2=%f,s=%f,e=%f,sc=%d\n",bondReductionFactors1,bondReductionFactors2,epsilon1,epsilon2,sigma1,sigma2,sigma,epsilon,sc);
+#endif
 #endif
 #endif
     real r6 = r2*r2*r2;

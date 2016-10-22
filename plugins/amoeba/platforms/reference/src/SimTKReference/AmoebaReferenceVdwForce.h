@@ -257,7 +257,7 @@ private:
     RealOpenMM        hhgEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
     RealOpenMM       mmffEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
     static RealOpenMM mmffEpsilonCombiningRuleHelper(RealOpenMM combinedSigma,
-        RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ, RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ);
+        RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ, RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ);
 
     /**---------------------------------------------------------------------------------------
     

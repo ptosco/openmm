@@ -25,8 +25,10 @@
 #include "AmoebaReferenceForce.h"
 #include "AmoebaReferenceVdwForce.h"
 #include "ReferenceForce.h"
+#include <openmm/Units.h>
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 
 using std::vector;
 using namespace OpenMM;
@@ -139,8 +141,14 @@ RealOpenMM AmoebaReferenceVdwForce::mmffSigmaCombiningRule(RealOpenMM sigmaI, Re
         haveDonor = true;
     }
     RealOpenMM gammaIJ = (sigmaI - sigmaJ) / (sigmaI + sigmaJ);
-    return (oneHalf * (sigmaI + sigmaJ) * (one + (haveDonor
-            ? zero : B * (one - exp(-Beta * gammaIJ * gammaIJ)))));
+    RealOpenMM sigma = oneHalf * (sigmaI + sigmaJ) * (one + (haveDonor
+        ? zero : B * (one - exp(-Beta * gammaIJ * gammaIJ))));
+    #if 0
+    std::cerr << "AmoebaReferenceVdwForce::mmffSigmaCombiningRule() "
+        << "haveDonor = " << haveDonor << ", sigmaI = " << sigmaI << ", sigmaJ = " << sigmaJ
+        << ", gammaIJ = " << gammaIJ << ", sigma = " << sigma << std::endl;
+    #endif
+    return sigma;
 }
 
 void AmoebaReferenceVdwForce::setEpsilonCombiningRule(const std::string& epsilonCombiningRule) {
@@ -188,13 +196,19 @@ RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRule(RealOpenMM epsilonI
 }
 
 RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper(RealOpenMM combinedSigma,
-    RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ, RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ) {
+    RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ, RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ) {
     RealOpenMM combinedSigma2 = combinedSigma * combinedSigma;
-    // 181.16 * OpenMM::KJPerKcal = 757.97344
-    static const RealOpenMM c4 = 757.97344;
-
-    return c4 * GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
-           combinedSigma2 * combinedSigma2 * combinedSigma2);
+    static const RealOpenMM NmPerAngstrom2 = NmPerAngstrom * NmPerAngstrom;
+    static const RealOpenMM c4 = 181.16 * KJPerKcal * NmPerAngstrom2 * NmPerAngstrom2 * NmPerAngstrom2;
+    RealOpenMM epsilon = GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
+        combinedSigma2 * combinedSigma2 * combinedSigma2);
+    #if 0
+    std::cerr << "AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper() "
+        << "GI * alphaI = " << GI_t_alphaI << ", GJ * alphaJ = " << GI_t_alphaI
+        << ", alphaI / NI = " << alphaI_d_NI << ", alphaJ / NJ = " << alphaJ_d_NJ
+        << ", epsilon = " << epsilon << std::endl;
+    #endif
+    return c4 * epsilon;
 }
 
 void AmoebaReferenceVdwForce::addReducedForce(unsigned int particleI, unsigned int particleIV,
