@@ -199,6 +199,10 @@ RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper(RealOpenMM co
     RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ, RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ) {
     RealOpenMM combinedSigma2 = combinedSigma * combinedSigma;
     static const RealOpenMM NmPerAngstrom2 = NmPerAngstrom * NmPerAngstrom;
+    if (alphaI_d_NI < 0.0)
+        alphaI_d_NI = -alphaI_d_NI;
+    if (alphaJ_d_NJ < 0.0)
+        alphaJ_d_NJ = -alphaJ_d_NJ;
     static const RealOpenMM c4 = 181.16 * KJPerKcal * NmPerAngstrom2 * NmPerAngstrom2 * NmPerAngstrom2;
     RealOpenMM epsilon = GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
         combinedSigma2 * combinedSigma2 * combinedSigma2);
