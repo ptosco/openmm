@@ -49,8 +49,18 @@
 
 #include "ReferencePlatform.h"
 
+// Some bizarre preprocessor magic required to convert a macro to a string...
+#define STRING1(x) #x
+#define STRING(x) STRING1(x)
+
 using namespace OpenMM;
 using namespace std;
+
+#ifdef WIN32
+static const char dirSeparator = '\\';
+#else
+static const char dirSeparator = '/';
+#endif
 
 std::vector<std::string> Platform::pluginLoadFailures;
 static bool stringLengthComparator(string i, string j) {
@@ -243,9 +253,7 @@ void Platform::loadPluginLibrary(const string& file) {
 
 vector<string> Platform::loadPluginsFromDirectory(const string& directory) {
     vector<string> files;
-    char dirSeparator;
 #ifdef WIN32
-    dirSeparator = '\\';
     WIN32_FIND_DATA fileInfo;
     string filePattern(directory + dirSeparator + "*.dll");
     HANDLE findHandle = FindFirstFile(filePattern.c_str(), &fileInfo);
@@ -258,7 +266,6 @@ vector<string> Platform::loadPluginsFromDirectory(const string& directory) {
     }
     vector<HMODULE> plugins;
 #else
-    dirSeparator = '/';
     DIR* dir;
     struct dirent *entry;
     dir = opendir(directory.c_str());
@@ -289,29 +296,17 @@ vector<string> Platform::loadPluginsFromDirectory(const string& directory) {
 
 const string& Platform::getDefaultPluginsDirectory() {
     char* dir = getenv("OPENMM_PLUGIN_DIR");
+    static const char dirSeparatorArray[2] = {dirSeparator, '\0'};
+    static const string dirSeparatorString(dirSeparatorArray);
     static string directory;
-#ifdef _MSC_VER
-    if (dir != NULL)
-        directory = string(dir);
-    else {
-        dir = getenv("PROGRAMFILES");
-        if (dir == NULL)
-            directory = "C:\\\\Program Files\\OpenMM\\lib\\plugins";
-        else
-            directory = string(dir)+"\\OpenMM\\lib\\plugins";
-    }
-#else
+    
     if (dir == NULL)
-        directory = "/usr/local/openmm/lib/plugins";
+        directory = STRING(OPENMM_INSTALL_PREFIX) + dirSeparatorString
+            + "lib" + dirSeparatorString + "plugins";
     else
         directory = string(dir);
-#endif
     return directory;
 }
-
-// Some bizarre preprocessor magic required to convert a macro to a string...
-#define STRING1(x) #x
-#define STRING(x) STRING1(x)
 
 const string& Platform::getOpenMMVersion() {
     static const string version = STRING(OPENMM_MAJOR_VERSION) "." STRING(OPENMM_MINOR_VERSION);

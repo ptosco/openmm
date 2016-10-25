@@ -59,7 +59,7 @@ public:
      *                       until the results converge without regard to how many iterations it takes.  The
      *                       default value is 0.
      */
-    static void minimize(Context& context, double tolerance = 10, int maxIterations = 0);
+    static int minimize(Context& context, double tolerance = 10, int maxIterations = 0);
 };
 
 } // namespace OpenMM
