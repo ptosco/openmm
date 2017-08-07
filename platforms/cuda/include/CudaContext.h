@@ -9,7 +9,7 @@
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2009-2016 Stanford University and the Authors.      *
+ * Portions copyright (c) 2009-2017 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -77,7 +77,8 @@ public:
     static const int ThreadBlockSize;
     static const int TileSize;
     CudaContext(const System& system, int deviceIndex, bool useBlockingSync, const std::string& precision,
-            const std::string& compiler, const std::string& tempDir, const std::string& hostCompiler, CudaPlatform::PlatformData& platformData);
+            const std::string& compiler, const std::string& tempDir, const std::string& hostCompiler, CudaPlatform::PlatformData& platformData,
+            CudaContext* originalContext);
     ~CudaContext();
     /**
      * This is called to initialize internal data structures after all Forces in the system
@@ -284,6 +285,10 @@ public:
      * Clear all buffers that have been registered with addAutoclearBuffer().
      */
     void clearAutoclearBuffers();
+    /**
+     * Sum the buffer containing energy.
+     */
+    double reduceEnergy();
     /**
      * Get the current simulation time.
      */
@@ -495,6 +500,10 @@ public:
         return *nonbonded;
     }
     /**
+     * Set the particle charges.  These are packed into the fourth element of the posq array.
+     */
+    void setCharges(const std::vector<double>& charges);
+    /**
      * Get the thread used by this context for executing parallel computations.
      */
     WorkThread& getWorkThread() {
@@ -577,6 +586,12 @@ public:
      * and order to be revalidated.
      */
     void invalidateMolecules();
+    /**
+     * Mark that the current molecule definitions from one particular force (and hence the atom order)
+     * may be invalid.  This should be called whenever force field parameters change.  It will cause the
+     * definitions and order to be revalidated.
+     */
+    bool invalidateMolecules(CudaForceInfo* force);
 private:
     /**
      * Compute a sorted list of device indices in decreasing order of desirability
@@ -612,6 +627,7 @@ private:
     int numAtomBlocks;
     int numThreadBlocks;
     bool useBlockingSync, useDoublePrecision, useMixedPrecision, contextIsValid, atomsWereReordered, boxIsTriclinic, hasCompilerKernel, isNvccAvailable, forcesValid;
+    bool isLinkedContext;
     std::string compiler, tempDir, cacheDir, gpuArchitecture;
     float4 periodicBoxVecXFloat, periodicBoxVecYFloat, periodicBoxVecZFloat, periodicBoxSizeFloat, invPeriodicBoxSizeFloat;
     double4 periodicBoxVecX, periodicBoxVecY, periodicBoxVecZ, periodicBoxSize, invPeriodicBoxSize;
@@ -626,6 +642,8 @@ private:
     CUfunction clearFourBuffersKernel;
     CUfunction clearFiveBuffersKernel;
     CUfunction clearSixBuffersKernel;
+    CUfunction reduceEnergyKernel;
+    CUfunction setChargesKernel;
     std::vector<CudaForceInfo*> forces;
     std::vector<Molecule> molecules;
     std::vector<MoleculeGroup> moleculeGroups;
@@ -636,8 +654,10 @@ private:
     CudaArray* velm;
     CudaArray* force;
     CudaArray* energyBuffer;
+    CudaArray* energySum;
     CudaArray* energyParamDerivBuffer;
     CudaArray* atomIndexDevice;
+    CudaArray* chargeBuffer;
     std::vector<std::string> energyParamDerivNames;
     std::map<std::string, double> energyParamDerivWorkspace;
     std::vector<int> atomIndex;

@@ -73,4 +73,30 @@ __global__ void clearSixBuffers(int* __restrict__ buffer1, int size1, int* __res
     clearSingleBuffer(buffer6, size6);
 }
 
+/**
+ * Sum the energy buffer.
+ */
+__global__ void reduceEnergy(const mixed* __restrict__ energyBuffer, mixed* __restrict__ result, int bufferSize, int workGroupSize) {
+    extern __shared__ mixed tempBuffer[];
+    const unsigned int thread = threadIdx.x;
+    mixed sum = 0;
+    for (unsigned int index = thread; index < bufferSize; index += blockDim.x)
+        sum += energyBuffer[index];
+    tempBuffer[thread] = sum;
+    for (int i = 1; i < workGroupSize; i *= 2) {
+        __syncthreads();
+        if (thread%(i*2) == 0 && thread+i < workGroupSize)
+            tempBuffer[thread] += tempBuffer[thread+i];
+    }
+    if (thread == 0)
+        *result = tempBuffer[0];
+}
+
+/**
+ * Record the atomic charges into the posq array.
+ */
+__global__ void setCharges(real* __restrict__ charges, real4* __restrict__ posq, int* __restrict__ atomOrder, int numAtoms) {
+    for (int i = blockDim.x*blockIdx.x+threadIdx.x; i < numAtoms; i += blockDim.x*gridDim.x)
+        posq[i].w = charges[atomOrder[i]];
+}
 }

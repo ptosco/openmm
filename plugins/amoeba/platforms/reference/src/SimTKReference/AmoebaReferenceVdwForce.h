@@ -25,7 +25,6 @@
 #ifndef __AmoebaReferenceVdwForce_H__
 #define __AmoebaReferenceVdwForce_H__
 
-#include "RealVec.h"
 #include "openmm/Vec3.h"
 #include "ReferenceNeighborList.h"
 #include <string>
@@ -34,7 +33,7 @@
 namespace OpenMM {
 
 class AmoebaReferenceVdwForce;
-typedef  RealOpenMM (AmoebaReferenceVdwForce::*CombiningFunction)(RealOpenMM x, RealOpenMM y) const;
+typedef double (AmoebaReferenceVdwForce::*CombiningFunction)(double x, double y) const;
 
 // ---------------------------------------------------------------------------------------
 
@@ -178,7 +177,7 @@ public:
     
        --------------------------------------------------------------------------------------- */
     
-    void setPeriodicBox(OpenMM::RealVec* vectors);
+    void setPeriodicBox(OpenMM::Vec3* vectors);
 
     /**---------------------------------------------------------------------------------------
     
@@ -197,12 +196,12 @@ public:
     
        --------------------------------------------------------------------------------------- */
     
-    RealOpenMM calculateForceAndEnergy(int numParticles, const std::vector<OpenMM::RealVec>& particlePositions,
-                                       const std::vector<int>& indexIVs, 
-                                       const std::vector<RealOpenMM>& sigmas, const std::vector<RealOpenMM>& epsilons,
-                                       const std::vector<RealOpenMM>& reductions,
-                                       const std::vector< std::set<int> >& vdwExclusions,
-                                       std::vector<OpenMM::RealVec>& forces) const;
+    double calculateForceAndEnergy(int numParticles, const std::vector<OpenMM::Vec3>& particlePositions,
+                                   const std::vector<int>& indexIVs, 
+                                   const std::vector<double>& sigmas, const std::vector<double>& epsilons,
+                                   const std::vector<double>& reductions,
+                                   const std::vector< std::set<int> >& vdwExclusions,
+                                   std::vector<OpenMM::Vec3>& forces) const;
          
     /**---------------------------------------------------------------------------------------
     
@@ -221,12 +220,12 @@ public:
     
        --------------------------------------------------------------------------------------- */
     
-    RealOpenMM calculateForceAndEnergy(int numParticles, const std::vector<OpenMM::RealVec>& particlePositions, 
-                                       const std::vector<int>& indexIVs, 
-                                       const std::vector<RealOpenMM>& sigmas, const std::vector<RealOpenMM>& epsilons,
-                                       const std::vector<RealOpenMM>& reductions,
-                                       const NeighborList& neighborList,
-                                       std::vector<OpenMM::RealVec>& forces) const;
+    double calculateForceAndEnergy(int numParticles, const std::vector<OpenMM::Vec3>& particlePositions, 
+                                   const std::vector<int>& indexIVs, 
+                                   const std::vector<double>& sigmas, const std::vector<double>& epsilons,
+                                   const std::vector<double>& reductions,
+                                   const NeighborList& neighborList,
+                                   std::vector<OpenMM::Vec3>& forces) const;
          
 private:
 
@@ -242,22 +241,22 @@ private:
     double _cutoff;
     double _taperCutoffFactor;
     double _taperCutoff;
-    RealOpenMM _taperCoefficients[3];
-    RealVec _periodicBoxVectors[3];
+    double _taperCoefficients[3];
+    Vec3 _periodicBoxVectors[3];
     CombiningFunction _combineSigmas;
-    RealOpenMM arithmeticSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
-    RealOpenMM  geometricSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
-    RealOpenMM  cubicMeanSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
-    RealOpenMM  mmffSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const;
+    double arithmeticSigmaCombiningRule(double sigmaI, double sigmaJ) const;
+    double  geometricSigmaCombiningRule(double sigmaI, double sigmaJ) const;
+    double  cubicMeanSigmaCombiningRule(double sigmaI, double sigmaJ) const;
+    double       mmffSigmaCombiningRule(double sigmaI, double sigmaJ) const;
 
     CombiningFunction _combineEpsilons;
-    RealOpenMM arithmeticEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    RealOpenMM  geometricEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    RealOpenMM   harmonicEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    RealOpenMM        hhgEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    RealOpenMM       mmffEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const;
-    static RealOpenMM mmffEpsilonCombiningRuleHelper(RealOpenMM combinedSigma,
-        RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ, RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ);
+    double arithmeticEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    double  geometricEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    double   harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    double        hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    double        mffEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    static double mmffEpsilonCombiningRuleHelper(double combinedSigma,
+        double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ);
 
     /**---------------------------------------------------------------------------------------
     
@@ -276,8 +275,8 @@ private:
     
        --------------------------------------------------------------------------------------- */
     
-    void setReducedPositions(int numParticles, const std::vector<RealVec>& particlePositions,
-                             const std::vector<int>& indexIVs, const std::vector<RealOpenMM>& reductions,
+    void setReducedPositions(int numParticles, const std::vector<Vec3>& particlePositions,
+                             const std::vector<int>& indexIVs, const std::vector<double>& reductions,
                              std::vector<Vec3>& reducedPositions) const;
 
     /**---------------------------------------------------------------------------------------
@@ -294,8 +293,8 @@ private:
        --------------------------------------------------------------------------------------- */
     
     void addReducedForce(unsigned int particleI, unsigned int particleIV,
-                         RealOpenMM reduction, RealOpenMM sign,
-                         Vec3& force, std::vector<OpenMM::RealVec>& forces) const;
+                         double reduction, double sign,
+                         Vec3& force, std::vector<OpenMM::Vec3>& forces) const;
     
     /**---------------------------------------------------------------------------------------
     
@@ -321,9 +320,9 @@ private:
 
        --------------------------------------------------------------------------------------- */
     
-    RealOpenMM calculatePairIxn(RealOpenMM combindedSigma, RealOpenMM combindedEpsilon,
-                                const Vec3& particleIPosition, const Vec3& particleJPosition,
-                                Vec3& force) const;
+    double calculatePairIxn(double combindedSigma, double combindedEpsilon,
+                            const Vec3& particleIPosition, const Vec3& particleJPosition,
+                            Vec3& force) const;
 
 };
 

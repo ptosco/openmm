@@ -36,6 +36,7 @@ from math import sqrt
 from simtk.openmm.app import Topology
 from simtk.openmm.app import PDBFile
 from simtk.openmm.app.internal import amber_file_parser
+from simtk.openmm.app.internal.singleton import Singleton
 from . import forcefield as ff
 from . import element as elem
 import simtk.unit as u
@@ -44,27 +45,27 @@ from simtk.openmm.app.internal.unitcell import computePeriodicBoxVectors
 
 # Enumerated values for implicit solvent model
 
-class HCT(object):
+class HCT(Singleton):
     def __repr__(self):
         return 'HCT'
 HCT = HCT()
 
-class OBC1(object):
+class OBC1(Singleton):
     def __repr__(self):
         return 'OBC1'
 OBC1 = OBC1()
 
-class OBC2(object):
+class OBC2(Singleton):
     def __repr__(self):
         return 'OBC2'
 OBC2 = OBC2()
 
-class GBn(object):
+class GBn(Singleton):
     def __repr__(self):
         return 'GBn'
 GBn = GBn()
 
-class GBn2(object):
+class GBn2(Singleton):
     def __repr__(self):
         return 'GBn2'
 GBn2 = GBn2()
@@ -160,7 +161,7 @@ class AmberPrmtopFile(object):
                      implicitSolventKappa=None, temperature=298.15*u.kelvin,
                      soluteDielectric=1.0, solventDielectric=78.5,
                      removeCMMotion=True, hydrogenMass=None, ewaldErrorTolerance=0.0005,
-                     switchDistance=0.0*u.nanometer):
+                     switchDistance=0.0*u.nanometer, gbsaModel='ACE'):
         """Construct an OpenMM System representing the topology described by this
         prmtop file.
 
@@ -168,7 +169,7 @@ class AmberPrmtopFile(object):
         ----------
         nonbondedMethod : object=NoCutoff
             The method to use for nonbonded interactions.  Allowed values are
-            NoCutoff, CutoffNonPeriodic, CutoffPeriodic, Ewald, or PME.
+            NoCutoff, CutoffNonPeriodic, CutoffPeriodic, Ewald, PME, or LJPME.
         nonbondedCutoff : distance=1*nanometer
             The cutoff distance to use for nonbonded interactions
         constraints : object=None
@@ -201,12 +202,17 @@ class AmberPrmtopFile(object):
             added to a hydrogen is subtracted from the heavy atom to keep their
             total mass the same.
         ewaldErrorTolerance : float=0.0005
-            The error tolerance to use if nonbondedMethod is Ewald or PME.
+            The error tolerance to use if nonbondedMethod is Ewald, PME, or LJPME.
         switchDistance : float=0*nanometers
             The distance at which the potential energy switching function is
             turned on for Lennard-Jones interactions. If the switchDistance is 0
             or evaluates to boolean False, no switching function will be used.
             Values greater than nonbondedCutoff or less than 0 raise ValueError
+        gbsaModel : str='ACE'
+            The SA model used to model the nonpolar solvation component of GB
+            implicit solvent models. If GB is active, this must be 'ACE' or None
+            (the latter indicates no SA model will be used). Other values will
+            result in a ValueError
 
         Returns
         -------
@@ -221,10 +227,11 @@ class AmberPrmtopFile(object):
                      ff.CutoffNonPeriodic:'CutoffNonPeriodic',
                      ff.CutoffPeriodic:'CutoffPeriodic',
                      ff.Ewald:'Ewald',
-                     ff.PME:'PME'}
+                     ff.PME:'PME',
+                     ff.LJPME:'LJPME'}
         if nonbondedMethod not in methodMap:
             raise ValueError('Illegal value for nonbonded method')
-        if not self._prmtop.getIfBox() and nonbondedMethod in (ff.CutoffPeriodic, ff.Ewald, ff.PME):
+        if not self._prmtop.getIfBox() and nonbondedMethod in (ff.CutoffPeriodic, ff.Ewald, ff.PME, ff.LJPME):
             raise ValueError('Illegal nonbonded method for a non-periodic system')
         constraintMap = {None:None,
                          ff.HBonds:'h-bonds',
@@ -271,7 +278,7 @@ class AmberPrmtopFile(object):
                         nonbondedCutoff=nonbondedCutoff, nonbondedMethod=methodMap[nonbondedMethod],
                         flexibleConstraints=False, gbmodel=implicitString, soluteDielectric=soluteDielectric,
                         solventDielectric=solventDielectric, implicitSolventKappa=implicitSolventKappa,
-                        rigidWater=rigidWater, elements=self.elements)
+                        rigidWater=rigidWater, elements=self.elements, gbsaModel=gbsaModel)
 
         if hydrogenMass is not None:
             for atom1, atom2 in self.topology.bonds():

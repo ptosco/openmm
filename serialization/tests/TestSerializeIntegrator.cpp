@@ -137,17 +137,29 @@ void testSerializeCustomIntegrator() {
     intg->addGlobalVariable("oute", 0);
     intg->addGlobalVariable("oute1", 0);
     intg->addGlobalVariable("oute2", 0);
+    intg->addGlobalVariable("oute3_conditional_v1", 0);// HACK: need addGlobals to be alphabetical to work around bug
+    intg->addGlobalVariable("oute3_conditional_v2", 0);
     intg->addComputePerDof("outf", "f");
     intg->addComputePerDof("outf1", "f1");
     intg->addComputePerDof("outf2", "f2");
     intg->addComputeGlobal("oute", "energy");
     intg->addComputeGlobal("oute1", "energy1");
     intg->addComputeGlobal("oute2", "energy2");
+    intg->beginIfBlock("1 > 0");
+    intg->addComputeGlobal("oute3_conditional_v1", "energy");
+    intg->endBlock();
+    intg->beginWhileBlock("0 > 1");
+    intg->addComputeGlobal("oute3_conditional_v2", "energy");
+    intg->endBlock();
     intg->addUpdateContextState();
     intg->addConstrainVelocities();
     intg->addComputeSum("summand2", "v*v+f*f");
     intg->setConstraintTolerance(1e-5);
     intg->setKineticEnergyExpression("m*v1*v1/2; v1=v+0.5*dt*f/m");
+    vector<double> values(10);
+    for (int i = 0; i < 10; i++)
+        values[i] = sin((double) i);
+    intg->addTabulatedFunction("f", new Continuous1DFunction(values, 0.5, 1.5));
     stringstream ss;
     XmlSerializer::serialize<Integrator>(intg, "CustomIntegrator", ss);
     CustomIntegrator *intg2 = dynamic_cast<CustomIntegrator*>(XmlSerializer::deserialize<Integrator>(ss));
@@ -182,6 +194,19 @@ void testSerializeCustomIntegrator() {
     ASSERT_EQUAL(intg->getRandomNumberSeed(), intg2->getRandomNumberSeed());
     ASSERT_EQUAL(intg->getStepSize(), intg2->getStepSize());
     ASSERT_EQUAL(intg->getConstraintTolerance(), intg2->getConstraintTolerance());
+    ASSERT_EQUAL(intg->getNumTabulatedFunctions(), intg2->getNumTabulatedFunctions());
+    for (int i = 0; i < intg->getNumTabulatedFunctions(); i++) {
+        double min1, min2, max1, max2;
+        vector<double> val1, val2;
+        dynamic_cast<Continuous1DFunction&>(intg->getTabulatedFunction(i)).getFunctionParameters(val1, min1, max1);
+        dynamic_cast<Continuous1DFunction&>(intg2->getTabulatedFunction(i)).getFunctionParameters(val2, min2, max2);
+        ASSERT_EQUAL(intg->getTabulatedFunctionName(i), intg2->getTabulatedFunctionName(i));
+        ASSERT_EQUAL(min1, min2);
+        ASSERT_EQUAL(max1, max2);
+        ASSERT_EQUAL(val1.size(), val2.size());
+        for (int j = 0; j < (int) val1.size(); j++)
+            ASSERT_EQUAL(val1[j], val2[j]);
+    }
     delete intg;
     delete intg2;
 }
@@ -216,13 +241,13 @@ int main() {
         testSerializeVerletIntegrator();
         testSerializeVariableLangevinIntegrator();
         testSerializeVariableVerletIntegrator();
-        testSerializeLangevinIntegrator(); 
+        testSerializeLangevinIntegrator();
         testSerializeCompoundIntegrator();
     }
     catch(const exception& e) {
-		return 1;
+        cout << "exception: " << e.what() << endl;
+        return 1;
     }
+    cout << "Done" << endl;
     return 0;
 }
-
-

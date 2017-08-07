@@ -98,6 +98,24 @@ __kernel void reduceForces(__global const long* restrict longBuffer, __global re
 #endif
 
 /**
+ * Sum the energy buffer.
+ */
+__kernel void reduceEnergy(__global const mixed* restrict energyBuffer, __global mixed* restrict result, int bufferSize, int workGroupSize, __local mixed* tempBuffer) {
+    const unsigned int thread = get_local_id(0);
+    mixed sum = 0;
+    for (unsigned int index = thread; index < bufferSize; index += get_local_size(0))
+        sum += energyBuffer[index];
+    tempBuffer[thread] = sum;
+    for (int i = 1; i < workGroupSize; i *= 2) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (thread%(i*2) == 0 && thread+i < workGroupSize)
+            tempBuffer[thread] += tempBuffer[thread+i];
+    }
+    if (thread == 0)
+        *result = tempBuffer[0];
+}
+
+/**
  * This is called to determine the accuracy of various native functions.
  */
 
@@ -106,4 +124,12 @@ __kernel void determineNativeAccuracy(__global float8* restrict values, int numV
         float v = values[i].s0;
         values[i] = (float8) (v, native_sqrt(v), native_rsqrt(v), native_recip(v), native_exp(v), native_log(v), 0.0f, 0.0f);
     }
+}
+
+/**
+ * Record the atomic charges into the posq array.
+ */
+__kernel void setCharges(__global real* restrict charges, __global real4* restrict posq, __global int* restrict atomOrder, int numAtoms) {
+    for (int i = get_global_id(0); i < numAtoms; i += get_global_size(0))
+        posq[i].w = charges[atomOrder[i]];
 }

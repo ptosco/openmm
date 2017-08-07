@@ -29,7 +29,7 @@ __kernel void findBlockBounds(int numAtoms, real4 periodicBoxSize, real4 invPeri
         real4 blockSize = 0.5f*(maxPos-minPos);
         real4 center = 0.5f*(maxPos+minPos);
         center.w = 0;
-        for (int i = base+1; i < last; i++) {
+        for (int i = base; i < last; i++) {
             pos = posq[i];
             real4 delta = posq[i]-center;
 #ifdef USE_PERIODIC
@@ -37,6 +37,7 @@ __kernel void findBlockBounds(int numAtoms, real4 periodicBoxSize, real4 invPeri
 #endif
             center.w = max(center.w, delta.x*delta.x+delta.y*delta.y+delta.z*delta.z);
         }
+        center.w = sqrt(center.w);
         blockBoundingBox[index] = blockSize;
         blockCenter[index] = center;
         sortedBlocks[index] = (real2) (blockSize.x+blockSize.y+blockSize.z, index);
@@ -98,13 +99,13 @@ __kernel void findBlocksWithInteractions(real4 periodicBoxSize, real4 invPeriodi
     __local real3 posBuffer[GROUP_SIZE];
     __local volatile int workgroupTileIndex[GROUP_SIZE/32];
     __local bool includeBlockFlags[GROUP_SIZE];
-    __local short2 atomCountBuffer[GROUP_SIZE];
+    __local volatile short2 atomCountBuffer[GROUP_SIZE];
     __local int* buffer = workgroupBuffer+BUFFER_SIZE*(warpStart/32);
     __local int* exclusionsForX = warpExclusions+MAX_EXCLUSIONS*(warpStart/32);
     __local volatile int* tileStartIndex = workgroupTileIndex+(warpStart/32);
 
     // Loop over blocks.
-    
+
     for (int block1 = startBlockIndex+warpIndex; block1 < startBlockIndex+numBlocks; block1 += totalWarps) {
         // Load data for this block.  Note that all threads in a warp are processing the same block.
         
@@ -157,6 +158,13 @@ __kernel void findBlocksWithInteractions(real4 periodicBoxSize, real4 invPeriodi
                 blockDelta.y = max((real) 0, fabs(blockDelta.y)-blockSizeX.y-blockSizeY.y);
                 blockDelta.z = max((real) 0, fabs(blockDelta.z)-blockSizeX.z-blockSizeY.z);
                 includeBlock2 &= (blockDelta.x*blockDelta.x+blockDelta.y*blockDelta.y+blockDelta.z*blockDelta.z < PADDED_CUTOFF_SQUARED);
+#ifdef TRICLINIC
+                // The calculation to find the nearest periodic copy is only guaranteed to work if the nearest copy is less than half a box width away.
+                // If there's any possibility we might have missed it, do a detailed check.
+
+                if (periodicBoxSize.z/2-blockSizeX.z-blockSizeY.z < PADDED_CUTOFF || periodicBoxSize.y/2-blockSizeX.y-blockSizeY.y < PADDED_CUTOFF)
+                    includeBlock2 = true;
+#endif
                 if (includeBlock2) {
                     unsigned short y = (unsigned short) sortedBlocks[block2].y;
                     for (int k = 0; k < numExclusions; k++)

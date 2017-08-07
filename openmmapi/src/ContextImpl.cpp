@@ -53,15 +53,16 @@ using namespace std;
 const static char CHECKPOINT_MAGIC_BYTES[] = "OpenMM Binary Checkpoint\n";
 
 
-ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integrator, Platform* platform, const map<string, string>& properties) :
+ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integrator, Platform* platform, const map<string, string>& properties, ContextImpl* originalContext) :
         owner(owner), system(system), integrator(integrator), hasInitializedForces(false), hasSetPositions(false), integratorIsDeleted(false),
         lastForceGroups(-1), platform(platform), platformData(NULL) {
-    if (system.getNumParticles() == 0)
+    int numParticles = system.getNumParticles();
+    if (numParticles == 0)
         throw OpenMMException("Cannot create a Context for a System with no particles");
     
     // Check for errors in virtual sites and massless particles.
     
-    for (int i = 0; i < system.getNumParticles(); i++) {
+    for (int i = 0; i < numParticles; i++) {
         if (system.isVirtualSite(i)) {
             if (system.getParticleMass(i) != 0.0)
                 throw OpenMMException("Virtual site has nonzero mass");
@@ -71,33 +72,42 @@ ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integ
                     throw OpenMMException("A virtual site cannot depend on another virtual site");
         }
     }
+    set<pair<int, int> > constraintAtoms;
     for (int i = 0; i < system.getNumConstraints(); i++) {
         int particle1, particle2;
         double distance;
         system.getConstraintParameters(i, particle1, particle2, distance);
+        if (particle1 == particle2)
+            throw OpenMMException("A constraint cannot connect a particle to itself");
+        if (particle1 < 0 || particle2 < 0 || particle1 >= numParticles || particle2 >= numParticles)
+            throw OpenMMException("Illegal particle index in constraint");
         double mass1 = system.getParticleMass(particle1);
         double mass2 = system.getParticleMass(particle2);
         if ((mass1 == 0.0 && mass2 != 0.0) || (mass2 == 0.0 && mass1 != 0.0))
             throw OpenMMException("A constraint cannot involve a massless particle");
+        pair<int, int> atoms = make_pair(min(particle1, particle2), max(particle1, particle2));
+        if (constraintAtoms.find(atoms) != constraintAtoms.end())
+            throw OpenMMException("The System has two constraints between the same atoms.  This will produce a singular constraint matrix.");
+        constraintAtoms.insert(atoms);
     }
     
     // Validate the list of properties.
 
     const vector<string>& platformProperties = platform->getPropertyNames();
     map<string, string> validatedProperties;
-    for (map<string, string>::const_iterator iter = properties.begin(); iter != properties.end(); ++iter) {
-        string property = iter->first;
+    for (auto& prop : properties) {
+        string property = prop.first;
         if (platform->deprecatedPropertyReplacements.find(property) != platform->deprecatedPropertyReplacements.end())
             property = platform->deprecatedPropertyReplacements[property];
         bool valid = false;
-        for (int i = 0; i < (int) platformProperties.size(); i++)
-            if (platformProperties[i] == property) {
+        for (auto& p : platformProperties)
+            if (p == property) {
                 valid = true;
                 break;
             }
         if (!valid)
-            throw OpenMMException("Illegal property name: "+iter->first);
-        validatedProperties[property] = iter->second;
+            throw OpenMMException("Illegal property name: "+prop.first);
+        validatedProperties[property] = prop.second;
     }
     
     // Find the list of kernels required.
@@ -109,8 +119,6 @@ ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integ
     kernelNames.push_back(VirtualSitesKernel::Name());
     for (int i = 0; i < system.getNumForces(); ++i) {
         forceImpls.push_back(system.getForce(i).createImpl());
-        map<string, double> forceParameters = forceImpls[forceImpls.size()-1]->getDefaultParameters();
-        parameters.insert(forceParameters.begin(), forceParameters.end());
         vector<string> forceKernels = forceImpls[forceImpls.size()-1]->getKernelNames();
         kernelNames.insert(kernelNames.begin(), forceKernels.begin(), forceKernels.end());
     }
@@ -144,7 +152,10 @@ ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integ
     for (int i = candidatePlatforms.size()-1; i >= 0; i--) {
         try {
             this->platform = platform = candidatePlatforms[i].second;
-            platform->contextCreated(*this, validatedProperties);
+            if (originalContext == NULL)
+                platform->contextCreated(*this, validatedProperties);
+            else
+                platform->linkedContextCreated(*this, *originalContext);
             break;
         }
         catch (...) {
@@ -153,7 +164,9 @@ ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integ
             throw;
         }
     }
-    
+}
+
+void ContextImpl::initialize() {
     // Create and initialize kernels and other objects.
     
     initializeForcesKernel = platform->createKernel(CalcForcesAndEnergyKernel::Name(), *this);
@@ -167,15 +180,18 @@ ContextImpl::ContextImpl(Context& owner, const System& system, Integrator& integ
     Vec3 periodicBoxVectors[3];
     system.getDefaultPeriodicBoxVectors(periodicBoxVectors[0], periodicBoxVectors[1], periodicBoxVectors[2]);
     updateStateDataKernel.getAs<UpdateStateDataKernel>().setPeriodicBoxVectors(*this, periodicBoxVectors[0], periodicBoxVectors[1], periodicBoxVectors[2]);
-    for (size_t i = 0; i < forceImpls.size(); ++i)
+    for (size_t i = 0; i < forceImpls.size(); ++i) {
         forceImpls[i]->initialize(*this);
+        map<string, double> forceParameters = forceImpls[i]->getDefaultParameters();
+        parameters.insert(forceParameters.begin(), forceParameters.end());
+    }
     integrator.initialize(*this);
     updateStateDataKernel.getAs<UpdateStateDataKernel>().setVelocities(*this, vector<Vec3>(system.getNumParticles()));
 }
 
 ContextImpl::~ContextImpl() {
-    for (int i = 0; i < (int) forceImpls.size(); ++i)
-        delete forceImpls[i];
+    for (auto force : forceImpls)
+        delete force;
     
     // Make sure all kernels get properly deleted before contextDestroyed() is called.
     
@@ -259,10 +275,14 @@ void ContextImpl::setPeriodicBoxVectors(const Vec3& a, const Vec3& b, const Vec3
 }
 
 void ContextImpl::applyConstraints(double tol) {
+    if (!hasSetPositions)
+        throw OpenMMException("Particle positions have not been set");
     applyConstraintsKernel.getAs<ApplyConstraintsKernel>().apply(*this, tol);
 }
 
 void ContextImpl::applyVelocityConstraints(double tol) {
+    if (!hasSetPositions)
+        throw OpenMMException("Particle positions have not been set");
     applyConstraintsKernel.getAs<ApplyConstraintsKernel>().applyToVelocities(*this, tol);
 }
 
@@ -278,8 +298,8 @@ double ContextImpl::calcForcesAndEnergy(bool includeForces, bool includeEnergy, 
     while (true) {
         double energy = 0.0;
         kernel.beginComputation(*this, includeForces, includeEnergy, groups);
-        for (int i = 0; i < (int) forceImpls.size(); ++i)
-            energy += forceImpls[i]->calcForcesAndEnergy(*this, includeForces, includeEnergy, groups);
+        for (auto force : forceImpls)
+            energy += force->calcForcesAndEnergy(*this, includeForces, includeEnergy, groups);
         bool valid = true;
         energy += kernel.finishComputation(*this, includeForces, includeEnergy, groups, valid);
         if (valid)
@@ -287,7 +307,7 @@ double ContextImpl::calcForcesAndEnergy(bool includeForces, bool includeEnergy, 
     }
 }
 
-int ContextImpl::getLastForceGroups() const {
+int& ContextImpl::getLastForceGroups() {
     return lastForceGroups;
 }
 
@@ -295,9 +315,11 @@ double ContextImpl::calcKineticEnergy() {
     return integrator.computeKineticEnergy();
 }
 
-void ContextImpl::updateContextState() {
-    for (int i = 0; i < (int) forceImpls.size(); ++i)
-        forceImpls[i]->updateContextState(*this);
+bool ContextImpl::updateContextState() {
+    bool forcesInvalid = false;
+    for (auto force : forceImpls)
+        force->updateContextState(*this, forcesInvalid);
+    return forcesInvalid;
 }
 
 const vector<ForceImpl*>& ContextImpl::getForceImpls() const {
@@ -335,8 +357,8 @@ const vector<vector<int> >& ContextImpl::getMolecules() const {
         system.getConstraintParameters(i, particle1, particle2, distance);
         bonds.push_back(std::make_pair(particle1, particle2));
     }
-    for (int i = 0; i < (int) forceImpls.size(); i++) {
-        vector<pair<int, int> > forceBonds = forceImpls[i]->getBondedParticles();
+    for (auto force : forceImpls) {
+        vector<pair<int, int> > forceBonds = force->getBondedParticles();
         bonds.insert(bonds.end(), forceBonds.begin(), forceBonds.end());
     }
     for (int i = 0; i < system.getNumParticles(); i++) {
@@ -351,9 +373,9 @@ const vector<vector<int> >& ContextImpl::getMolecules() const {
 
     int numParticles = system.getNumParticles();
     vector<vector<int> > particleBonds(numParticles);
-    for (int i = 0; i < (int) bonds.size(); i++) {
-        particleBonds[bonds[i].first].push_back(bonds[i].second);
-        particleBonds[bonds[i].second].push_back(bonds[i].first);
+    for (auto& bond : bonds) {
+        particleBonds[bond.first].push_back(bond.second);
+        particleBonds[bond.second].push_back(bond.first);
     }
 
     // Now identify particles by which molecule they belong to.
@@ -427,9 +449,9 @@ void ContextImpl::createCheckpoint(ostream& stream) {
     stream.write((char*) &numParticles, sizeof(int));
     int numParameters = parameters.size();
     stream.write((char*) &numParameters, sizeof(int));
-    for (map<string, double>::const_iterator iter = parameters.begin(); iter != parameters.end(); ++iter) {
-        writeString(stream, iter->first);
-        stream.write((char*) &iter->second, sizeof(double));
+    for (auto& param : parameters) {
+        writeString(stream, param.first);
+        stream.write((char*) &param.second, sizeof(double));
     }
     updateStateDataKernel.getAs<UpdateStateDataKernel>().createCheckpoint(*this, stream);
     stream.flush();
@@ -459,4 +481,12 @@ void ContextImpl::loadCheckpoint(istream& stream) {
     }
     updateStateDataKernel.getAs<UpdateStateDataKernel>().loadCheckpoint(*this, stream);
     hasSetPositions = true;
+}
+
+void ContextImpl::systemChanged() {
+    integrator.stateChanged(State::Energy);
+}
+
+Context* ContextImpl::createLinkedContext(const System& system, Integrator& integrator) {
+    return new Context(system, integrator, *this);
 }

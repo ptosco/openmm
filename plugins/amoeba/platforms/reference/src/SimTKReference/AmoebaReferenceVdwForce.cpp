@@ -28,7 +28,7 @@
 #include <openmm/Units.h>
 #include <algorithm>
 #include <cctype>
-#include <iostream>
+#include <cmath>
 
 using std::vector;
 using namespace OpenMM;
@@ -78,7 +78,7 @@ double AmoebaReferenceVdwForce::getCutoff() const {
     return _cutoff;
 }
 
-void AmoebaReferenceVdwForce::setPeriodicBox(OpenMM::RealVec* vectors) {
+void AmoebaReferenceVdwForce::setPeriodicBox(OpenMM::Vec3* vectors) {
     _periodicBoxVectors[0] = vectors[0];
     _periodicBoxVectors[1] = vectors[1];
     _periodicBoxVectors[2] = vectors[2];
@@ -106,48 +106,37 @@ std::string AmoebaReferenceVdwForce::getSigmaCombiningRule() const {
     return _sigmaCombiningRule;
 }
 
-RealOpenMM AmoebaReferenceVdwForce::arithmeticSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const {
+double AmoebaReferenceVdwForce::arithmeticSigmaCombiningRule(double sigmaI, double sigmaJ) const {
     return (sigmaI + sigmaJ);
 }
 
-RealOpenMM AmoebaReferenceVdwForce::geometricSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const {
-    return 2.0*SQRT(sigmaI*sigmaJ);
+double AmoebaReferenceVdwForce::geometricSigmaCombiningRule(double sigmaI, double sigmaJ) const {
+    return 2.0*sqrt(sigmaI*sigmaJ);
 }
 
-RealOpenMM AmoebaReferenceVdwForce::cubicMeanSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const {
+double AmoebaReferenceVdwForce::cubicMeanSigmaCombiningRule(double sigmaI, double sigmaJ) const {
+    double sigmaI2 = sigmaI*sigmaI;
+    double sigmaJ2 = sigmaJ*sigmaJ;
 
-    const RealOpenMM zero = 0.0;
-
-    RealOpenMM sigmaI2    = sigmaI*sigmaI;
-    RealOpenMM sigmaJ2    = sigmaJ*sigmaJ;
-
-    return sigmaI != zero && sigmaJ != 0.0 ? 2.0*(sigmaI2*sigmaI + sigmaJ2*sigmaJ)/(sigmaI2 + sigmaJ2) : zero;
+    return sigmaI != 0.0 && sigmaJ != 0.0 ? 2.0*(sigmaI2*sigmaI + sigmaJ2*sigmaJ)/(sigmaI2 + sigmaJ2) : 0.0;
 }
 
-RealOpenMM AmoebaReferenceVdwForce::mmffSigmaCombiningRule(RealOpenMM sigmaI, RealOpenMM sigmaJ) const {
+double AmoebaReferenceVdwForce::mmffSigmaCombiningRule(double sigmaI, double sigmaJ) const {
 
-    static const RealOpenMM zero = 0.0;
-    static const RealOpenMM one = 1.0;
-    static const RealOpenMM oneHalf = 0.5;
-    static const RealOpenMM B = 0.2;
-    static const RealOpenMM Beta = 12.0;
+    static const double B = 0.2;
+    static const double Beta = 12.0;
     bool haveDonor = false;
-    if (sigmaI < zero) {
+    if (sigmaI < 0.0) {
         sigmaI = -sigmaI;
         haveDonor = true;
     }
-    if (sigmaJ < zero) {
+    if (sigmaJ < 0.0) {
         sigmaJ = -sigmaJ;
         haveDonor = true;
     }
-    RealOpenMM gammaIJ = (sigmaI - sigmaJ) / (sigmaI + sigmaJ);
-    RealOpenMM sigma = oneHalf * (sigmaI + sigmaJ) * (one + (haveDonor
-        ? zero : B * (one - exp(-Beta * gammaIJ * gammaIJ))));
-    #if 0
-    std::cerr << "AmoebaReferenceVdwForce::mmffSigmaCombiningRule() "
-        << "haveDonor = " << haveDonor << ", sigmaI = " << sigmaI << ", sigmaJ = " << sigmaJ
-        << ", gammaIJ = " << gammaIJ << ", sigma = " << sigma << std::endl;
-    #endif
+    double gammaIJ = (sigmaI - sigmaJ) / (sigmaI + sigmaJ);
+    double sigma = 0.5 * (sigmaI + sigmaJ) * (1.0 + (haveDonor
+        ? 0.0 : B * (1.0 - exp(-Beta * gammaIJ * gammaIJ))));
     return sigma;
 }
 
@@ -175,120 +164,100 @@ std::string AmoebaReferenceVdwForce::getEpsilonCombiningRule() const {
     return _epsilonCombiningRule;
 }
 
-RealOpenMM AmoebaReferenceVdwForce::arithmeticEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
+double AmoebaReferenceVdwForce::arithmeticEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
     return 0.5*(epsilonI + epsilonJ);
 }
 
-RealOpenMM AmoebaReferenceVdwForce::geometricEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
-    return SQRT(epsilonI*epsilonJ);
+double AmoebaReferenceVdwForce::geometricEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
+    return sqrt(epsilonI*epsilonJ);
 }
 
-RealOpenMM AmoebaReferenceVdwForce::harmonicEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
+double AmoebaReferenceVdwForce::harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
     return (epsilonI != 0.0 && epsilonJ != 0.0) ? 2.0*(epsilonI*epsilonJ)/(epsilonI + epsilonJ) : 0.0;
 }
 
-RealOpenMM AmoebaReferenceVdwForce::hhgEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
-    RealOpenMM denominator = SQRT(epsilonI) + SQRT(epsilonJ);
+double AmoebaReferenceVdwForce::hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
+    double denominator = sqrt(epsilonI) + sqrt(epsilonJ);
     return (epsilonI != 0.0 && epsilonJ != 0.0) ? 4.0*(epsilonI*epsilonJ)/(denominator*denominator) : 0.0;
 }
 
-RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRule(RealOpenMM epsilonI, RealOpenMM epsilonJ) const {
+double AmoebaReferenceVdwForce::mmffEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
 }
 
-RealOpenMM AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper(RealOpenMM combinedSigma,
-    RealOpenMM alphaI_d_NI, RealOpenMM alphaJ_d_NJ, RealOpenMM GI_t_alphaI, RealOpenMM GJ_t_alphaJ) {
-    RealOpenMM combinedSigma2 = combinedSigma * combinedSigma;
-    static const RealOpenMM NmPerAngstrom2 = NmPerAngstrom * NmPerAngstrom;
+double AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper(double combinedSigma,
+    double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ) {
+    double combinedSigma2 = combinedSigma * combinedSigma;
+    static const double NmPerAngstrom2 = NmPerAngstrom * NmPerAngstrom;
     if (alphaI_d_NI < 0.0)
         alphaI_d_NI = -alphaI_d_NI;
     if (alphaJ_d_NJ < 0.0)
         alphaJ_d_NJ = -alphaJ_d_NJ;
-    static const RealOpenMM c4 = 181.16 * KJPerKcal * NmPerAngstrom2 * NmPerAngstrom2 * NmPerAngstrom2;
-    RealOpenMM epsilon = GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
+    static const double c4 = 181.16 * KJPerKcal * NmPerAngstrom2 * NmPerAngstrom2 * NmPerAngstrom2;
+    double epsilon = GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
         combinedSigma2 * combinedSigma2 * combinedSigma2);
-    #if 0
-    std::cerr << "AmoebaReferenceVdwForce::mmffEpsilonCombiningRuleHelper() "
-        << "GI * alphaI = " << GI_t_alphaI << ", GJ * alphaJ = " << GI_t_alphaI
-        << ", alphaI / NI = " << alphaI_d_NI << ", alphaJ / NJ = " << alphaJ_d_NJ
-        << ", epsilon = " << epsilon << std::endl;
-    #endif
     return c4 * epsilon;
 }
 
 void AmoebaReferenceVdwForce::addReducedForce(unsigned int particleI, unsigned int particleIV,
-                                              RealOpenMM reduction, RealOpenMM sign,
-                                              Vec3& force, vector<RealVec>& forces) const {
-
-// ---------------------------------------------------------------------------------------
-
-    static const RealOpenMM one           = 1.0;
-
-   // ---------------------------------------------------------------------------------------
+                                              double reduction, double sign,
+                                              Vec3& force, vector<Vec3>& forces) const {
 
     forces[particleI][0]  += sign*force[0]*reduction;
     forces[particleI][1]  += sign*force[1]*reduction;
     forces[particleI][2]  += sign*force[2]*reduction;
 
-    forces[particleIV][0] += sign*force[0]*(one - reduction);
-    forces[particleIV][1] += sign*force[1]*(one - reduction);
-    forces[particleIV][2] += sign*force[2]*(one - reduction);
+    forces[particleIV][0] += sign*force[0]*(1.0 - reduction);
+    forces[particleIV][1] += sign*force[1]*(1.0 - reduction);
+    forces[particleIV][2] += sign*force[2]*(1.0 - reduction);
 }
 
-RealOpenMM AmoebaReferenceVdwForce::calculatePairIxn(RealOpenMM combinedSigma, RealOpenMM combinedEpsilon,
-                                                     const Vec3& particleIPosition,
-                                                     const Vec3& particleJPosition,
-                                                     Vec3& force) const {
-
-   // ---------------------------------------------------------------------------------------
-
-    static const RealOpenMM one           = 1.0;
-    static const RealOpenMM two           = 2.0;
-    static const RealOpenMM seven         = 7.0;
-
-    static const RealOpenMM dhal          = 0.07;
-    static const RealOpenMM ghal          = 0.12;
-
-   // ---------------------------------------------------------------------------------------
+double AmoebaReferenceVdwForce::calculatePairIxn(double combinedSigma, double combinedEpsilon,
+                                                 const Vec3& particleIPosition,
+                                                 const Vec3& particleJPosition,
+                                                 Vec3& force) const {
+    
+    static const double dhal = 0.07;
+    static const double ghal = 0.12;
 
     // get deltaR, R2, and R between 2 atoms
 
-    RealOpenMM deltaR[ReferenceForce::LastDeltaRIndex];
+    double deltaR[ReferenceForce::LastDeltaRIndex];
     if (_nonbondedMethod == CutoffPeriodic)
         ReferenceForce::getDeltaRPeriodic(particleJPosition, particleIPosition, _periodicBoxVectors, deltaR);
     else
         ReferenceForce::getDeltaR(particleJPosition, particleIPosition, deltaR);
 
-    RealOpenMM r_ij_2       = deltaR[ReferenceForce::R2Index];
-    RealOpenMM r_ij         = deltaR[ReferenceForce::RIndex];
-    RealOpenMM sigma_7      = combinedSigma*combinedSigma*combinedSigma;
-               sigma_7      = sigma_7*sigma_7*combinedSigma;
+    double r_ij_2       = deltaR[ReferenceForce::R2Index];
+    double r_ij         = deltaR[ReferenceForce::RIndex];
+    double sigma_7      = combinedSigma*combinedSigma*combinedSigma;
+           sigma_7      = sigma_7*sigma_7*combinedSigma;
 
-    RealOpenMM r_ij_6       = r_ij_2*r_ij_2*r_ij_2;
-    RealOpenMM r_ij_7       = r_ij_6*r_ij;
+    double r_ij_6       = r_ij_2*r_ij_2*r_ij_2;
+    double r_ij_7       = r_ij_6*r_ij;
 
-    RealOpenMM rho          = r_ij_7 + ghal*sigma_7;
+    double rho          = r_ij_7 + ghal*sigma_7;
 
-    RealOpenMM tau          = (dhal + one)/(r_ij + dhal*combinedSigma);
-    RealOpenMM tau_7        = tau*tau*tau;
-               tau_7        = tau_7*tau_7*tau;
+    double tau          = (dhal + 1.0)/(r_ij + dhal*combinedSigma);
+    double tau_7        = tau*tau*tau;
+           tau_7        = tau_7*tau_7*tau;
 
-    RealOpenMM dtau         = tau/(dhal + one);
+    double dtau         = tau/(dhal + 1.0);
 
-    RealOpenMM ratio        = (sigma_7/rho);
-    RealOpenMM gtau         = combinedEpsilon*tau_7*r_ij_6*(ghal+one)*ratio*ratio;
+    double ratio        = (sigma_7/rho);
+    double gtau         = combinedEpsilon*tau_7*r_ij_6*(ghal+1.0)*ratio*ratio;
 
-    RealOpenMM energy       = combinedEpsilon*tau_7*sigma_7*((ghal+one)*sigma_7/rho - two);
+    double energy       = combinedEpsilon*tau_7*sigma_7*((ghal+1.0)*sigma_7/rho - 2.0);
 
-    RealOpenMM dEdR         = -seven*(dtau*energy + gtau);
+    double dEdR         = -7.0*(dtau*energy + gtau);
 
     // tapering
 
     if ((_nonbondedMethod == CutoffNonPeriodic || _nonbondedMethod == CutoffPeriodic) && r_ij > _taperCutoff) {
-        RealOpenMM delta    = r_ij - _taperCutoff;
-        RealOpenMM taper    = 1.0 + delta*delta*delta*(_taperCoefficients[C3] + delta*(_taperCoefficients[C4] + delta*_taperCoefficients[C5]));
-        RealOpenMM dtaper   = delta*delta*(3.0*_taperCoefficients[C3] + delta*(4.0*_taperCoefficients[C4] + delta*5.0*_taperCoefficients[C5]));
-        dEdR                = energy*dtaper + dEdR*taper;
-        energy             *= taper;
+        double delta    = r_ij - _taperCutoff;
+        double taper    = 1.0 + delta*delta*delta*(_taperCoefficients[C3] + delta*(_taperCoefficients[C4] + delta*_taperCoefficients[C5]));
+        double dtaper   = delta*delta*(3.0*_taperCoefficients[C3] + delta*(4.0*_taperCoefficients[C4] + delta*5.0*_taperCoefficients[C5]));
+        dEdR            = energy*dtaper + dEdR*taper;
+        energy         *= taper;
     }
 
     dEdR                   /= r_ij;
@@ -302,16 +271,14 @@ RealOpenMM AmoebaReferenceVdwForce::calculatePairIxn(RealOpenMM combinedSigma, R
 }
 
 void AmoebaReferenceVdwForce::setReducedPositions(int numParticles,
-                                                  const vector<RealVec>& particlePositions,
+                                                  const vector<Vec3>& particlePositions,
                                                   const std::vector<int>& indexIVs, 
-                                                  const std::vector<RealOpenMM>& reductions,
+                                                  const std::vector<double>& reductions,
                                                   std::vector<Vec3>& reducedPositions) const {
-
-    static const RealOpenMM zero          = 0.0;
 
     reducedPositions.resize(numParticles);
     for (unsigned int ii = 0; ii <  static_cast<unsigned int>(numParticles); ii++) {
-        if (reductions[ii] != zero) {
+        if (reductions[ii] != 0.0) {
             int reductionIndex     = indexIVs[ii];
             reducedPositions[ii]   = Vec3(reductions[ii]*(particlePositions[ii][0] - particlePositions[reductionIndex][0]) + particlePositions[reductionIndex][0], 
                                           reductions[ii]*(particlePositions[ii][1] - particlePositions[reductionIndex][1]) + particlePositions[reductionIndex][1], 
@@ -322,23 +289,15 @@ void AmoebaReferenceVdwForce::setReducedPositions(int numParticles,
     }
 }
 
-RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
-                                                            const vector<RealVec>& particlePositions,
-                                                            const std::vector<int>& indexIVs, 
-                                                            const std::vector<RealOpenMM>& sigmas,
-                                                            const std::vector<RealOpenMM>& epsilons,
-                                                            const std::vector<RealOpenMM>& reductions,
-                                                            const std::vector< std::set<int> >& allExclusions,
-                                                            vector<RealVec>& forces) const {
+double AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
+                                                        const vector<OpenMM::Vec3>& particlePositions,
+                                                        const std::vector<int>& indexIVs, 
+                                                        const std::vector<double>& sigmas,
+                                                        const std::vector<double>& epsilons,
+                                                        const std::vector<double>& reductions,
+                                                        const std::vector< std::set<int> >& allExclusions,
+                                                        vector<OpenMM::Vec3>& forces) const {
 
-    // ---------------------------------------------------------------------------------------
-
-    static const RealOpenMM zero          = 0.0;
-    static const RealOpenMM one           = 1.0;
-    static const RealOpenMM two           = 2.0;
-
-    // ---------------------------------------------------------------------------------------
-                                                                
     // MMFF rules:
     // combinedSigma is equivalent to R_star_ij
     // the sigmas array should be initialized with R_star for each particle
@@ -348,6 +307,8 @@ RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
     // - if sigma > 0.0 and epsilon > 0.0, then the particle is neither a donor nor an acceptor
     // - if sigma > 0.0 and epsilon < 0.0, then the particle is an acceptor
     // - if sigma < 0.0, then the particle is a donor
+    static const double DARAD = 0.8;
+    static const double DAEPS = 0.5;
 
     // set reduced coordinates
 
@@ -363,84 +324,71 @@ RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
     //        based on reduction factor
     //    (4) reset exclusion vector
 
-    RealOpenMM energy = zero;
+    double energy = 0.0;
     std::vector<unsigned int> exclusions(numParticles, 0);
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(numParticles); ii++) {
  
-        RealOpenMM sigmaI      = sigmas[ii];
-        RealOpenMM epsilonI    = epsilons[ii];
-        for (std::set<int>::const_iterator jj = allExclusions[ii].begin(); jj != allExclusions[ii].end(); jj++) {
-            exclusions[*jj] = 1;
-        }
+        double sigmaI      = sigmas[ii];
+        double epsilonI    = epsilons[ii];
+        for (int jj : allExclusions[ii])
+            exclusions[jj] = 1;
 
         for (unsigned int jj = ii+1; jj < static_cast<unsigned int>(numParticles); jj++) {
             if (exclusions[jj] == 0) {
 
-                RealOpenMM sigmaJ      = sigmas[jj];
-                RealOpenMM epsilonJ    = epsilons[jj];
-                RealOpenMM combinedSigma   = (this->*_combineSigmas)(sigmaI, sigmaJ);
-                RealOpenMM combinedEpsilon = (this->_combineEpsilons == &AmoebaReferenceVdwForce::mmffEpsilonCombiningRule)
-                                             ? mmffEpsilonCombiningRuleHelper(combinedSigma, epsilonI, epsilonJ, reductions[ii], reductions[jj])
-                                             : (this->*_combineEpsilons)(epsilonI, epsilonJ);
+                double sigmaJ      = sigmas[jj];
+                double epsilonJ    = epsilons[jj];
+                double combinedSigma   = (this->*_combineSigmas)(sigmaI, sigmaJ);
+                double combinedEpsilon = (this->_combineEpsilons == &AmoebaReferenceVdwForce::mmffEpsilonCombiningRule)
+                                         ? mmffEpsilonCombiningRuleHelper(combinedSigma, epsilonI, epsilonJ, reductions[ii], reductions[jj])
+                                         : (this->*_combineEpsilons)(epsilonI, epsilonJ);
                 
                 // in MMFF, if one of the particles is an acceptor and the other one is a donor,
                 // then we want to scale sigma and epsilon
                 if ((this->_combineSigmas == &AmoebaReferenceVdwForce::mmffSigmaCombiningRule)
-                    && (((sigmas[ii] < zero) && (sigmas[jj] > zero) && (epsilons[jj] < zero))
-                    || ((sigmas[jj] < zero) && (sigmas[ii] > zero) && (epsilons[ii] < zero)))) {
-                    static const RealOpenMM DARAD = 0.8;
+                    && (((sigmas[ii] < 0.0) && (sigmas[jj] > 0.0) && (epsilons[jj] < 0.0))
+                    || ((sigmas[jj] < 0.0) && (sigmas[ii] > 0.0) && (epsilons[ii] < 0.0)))) {
                     combinedSigma *= DARAD;
-                    static const RealOpenMM DAEPS = 0.5;
                     combinedEpsilon *= DAEPS;
                 }
 
                 Vec3 force;
-                energy                     += calculatePairIxn(combinedSigma, combinedEpsilon,
-                                                               reducedPositions[ii], reducedPositions[jj],
-                                                               force);
+                energy += calculatePairIxn(combinedSigma, combinedEpsilon,
+                                           reducedPositions[ii], reducedPositions[jj], force);
                 
                 if (indexIVs[ii] == ii) {
                     forces[ii][0] -= force[0];
                     forces[ii][1] -= force[1];
                     forces[ii][2] -= force[2];
                 } else {
-                    addReducedForce(ii, indexIVs[ii], reductions[ii], -one, force, forces);
+                    addReducedForce(ii, indexIVs[ii], reductions[ii], -1.0, force, forces);
                 }
                 if (indexIVs[jj] == jj) {
                     forces[jj][0] += force[0];
                     forces[jj][1] += force[1];
                     forces[jj][2] += force[2];
                 } else {
-                    addReducedForce(jj, indexIVs[jj], reductions[jj], one, force, forces);
+                    addReducedForce(jj, indexIVs[jj], reductions[jj], 1.0, force, forces);
                 }
 
             }
         }
 
-        for (std::set<int>::const_iterator jj = allExclusions[ii].begin(); jj != allExclusions[ii].end(); jj++) {
-            exclusions[*jj] = 0;
-        }
+        for (int jj : allExclusions[ii])
+            exclusions[jj] = 0;
     }
 
     return energy;
 }
 
-RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
-                                                            const vector<RealVec>& particlePositions,
-                                                            const std::vector<int>& indexIVs, 
-                                                            const std::vector<RealOpenMM>& sigmas,
-                                                            const std::vector<RealOpenMM>& epsilons,
-                                                            const std::vector<RealOpenMM>& reductions,
-                                                            const NeighborList& neighborList,
-                                                            vector<RealVec>& forces) const {
-
-    // ---------------------------------------------------------------------------------------
-
-    static const RealOpenMM zero          = 0.0;
-    static const RealOpenMM one           = 1.0;
-    static const RealOpenMM two           = 2.0;
-
-    // ---------------------------------------------------------------------------------------
+double AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
+                                                        const vector<Vec3>& particlePositions,
+                                                        const std::vector<int>& indexIVs, 
+                                                        const std::vector<double>& sigmas,
+                                                        const std::vector<double>& epsilons,
+                                                        const std::vector<double>& reductions,
+                                                        const NeighborList& neighborList,
+                                                        vector<Vec3>& forces) const {
 
     // set reduced coordinates
 
@@ -453,15 +401,15 @@ RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
     //        then call addReducedForce() to apportion force to particle and its covalent partner
     //        based on reduction factor
 
-    RealOpenMM energy = zero;
+    double energy = 0.0;
     for (unsigned int ii = 0; ii < neighborList.size(); ii++) {
 
         OpenMM::AtomPair pair       = neighborList[ii];
         int siteI                   = pair.first;
         int siteJ                   = pair.second;
 
-        RealOpenMM combinedSigma   = (this->*_combineSigmas)(sigmas[siteI], sigmas[siteJ]);
-        RealOpenMM combinedEpsilon = (this->*_combineEpsilons)(epsilons[siteI], epsilons[siteJ]);
+        double combinedSigma   = (this->*_combineSigmas)(sigmas[siteI], sigmas[siteJ]);
+        double combinedEpsilon = (this->*_combineEpsilons)(epsilons[siteI], epsilons[siteJ]);
 
         Vec3 force;
         energy                     += calculatePairIxn(combinedSigma, combinedEpsilon,
@@ -472,14 +420,14 @@ RealOpenMM AmoebaReferenceVdwForce::calculateForceAndEnergy(int numParticles,
             forces[siteI][1] -= force[1];
             forces[siteI][2] -= force[2];
         } else {
-            addReducedForce(siteI, indexIVs[siteI], reductions[siteI], -one, force, forces);
+            addReducedForce(siteI, indexIVs[siteI], reductions[siteI], -1.0, force, forces);
         }
         if (indexIVs[siteJ] == siteJ) {
             forces[siteJ][0] += force[0];
             forces[siteJ][1] += force[1];
             forces[siteJ][2] += force[2];
         } else {
-            addReducedForce(siteJ, indexIVs[siteJ], reductions[siteJ], one, force, forces);
+            addReducedForce(siteJ, indexIVs[siteJ], reductions[siteJ], 1.0, force, forces);
         }
 
     }

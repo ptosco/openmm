@@ -163,7 +163,8 @@ public:
     class ForcePostComputation;
     static const int ThreadBlockSize;
     static const int TileSize;
-    OpenCLContext(const System& system, int platformIndex, int deviceIndex, const std::string& precision, OpenCLPlatform::PlatformData& platformData);
+    OpenCLContext(const System& system, int platformIndex, int deviceIndex, const std::string& precision, OpenCLPlatform::PlatformData& platformData,
+        OpenCLContext* originalContext);
     ~OpenCLContext();
     /**
      * This is called to initialize internal data structures after all Forces in the system
@@ -363,9 +364,13 @@ public:
      */
     void reduceBuffer(OpenCLArray& array, int numBuffers);
     /**
-     * Sum the buffesr containing forces.
+     * Sum the buffers containing forces.
      */
     void reduceForces();
+    /**
+     * Sum the buffer containing energy.
+     */
+    double reduceEnergy();
     /**
      * Get the current simulation time.
      */
@@ -610,6 +615,10 @@ public:
         return *nonbonded;
     }
     /**
+     * Set the particle charges.  These are packed into the fourth element of the posq array.
+     */
+    void setCharges(const std::vector<double>& charges);
+    /**
      * Get the thread used by this context for executing parallel computations.
      */
     WorkThread& getWorkThread() {
@@ -692,6 +701,12 @@ public:
      * and order to be revalidated.
      */
     void invalidateMolecules();
+    /**
+     * Mark that the current molecule definitions from one particular force (and hence the atom order)
+     * may be invalid.  This should be called whenever force field parameters change.  It will cause the
+     * definitions and order to be revalidated.
+     */
+    bool invalidateMolecules(OpenCLForceInfo* force);
 private:
     struct Molecule;
     struct MoleculeGroup;
@@ -739,6 +754,8 @@ private:
     cl::Kernel clearSixBuffersKernel;
     cl::Kernel reduceReal4Kernel;
     cl::Kernel reduceForcesKernel;
+    cl::Kernel reduceEnergyKernel;
+    cl::Kernel setChargesKernel;
     std::vector<OpenCLForceInfo*> forces;
     std::vector<Molecule> molecules;
     std::vector<MoleculeGroup> moleculeGroups;
@@ -752,8 +769,10 @@ private:
     OpenCLArray* forceBuffers;
     OpenCLArray* longForceBuffer;
     OpenCLArray* energyBuffer;
+    OpenCLArray* energySum;
     OpenCLArray* energyParamDerivBuffer;
     OpenCLArray* atomIndexDevice;
+    OpenCLArray* chargeBuffer;
     std::vector<std::string> energyParamDerivNames;
     std::map<std::string, double> energyParamDerivWorkspace;
     std::vector<int> atomIndex;

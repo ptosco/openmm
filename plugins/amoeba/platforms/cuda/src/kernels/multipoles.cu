@@ -24,13 +24,23 @@ extern "C" __global__ void computeLabFrameMoments(real4* __restrict__ posq, int4
         // code common to ZThenX and Bisector
         
         int4 particles = multipoleParticles[atom];
-        if (particles.x >= 0 && particles.z >= 0) {
+        if (particles.z >= 0) {
             real4 thisParticlePos = posq[atom];
             real4 posZ = posq[particles.z];
-            real3 vectorZ = make_real3(posZ.x-thisParticlePos.x, posZ.y-thisParticlePos.y, posZ.z-thisParticlePos.z);
-            real4 posX = posq[particles.x];
-            real3 vectorX = make_real3(posX.x-thisParticlePos.x, posX.y-thisParticlePos.y, posX.z-thisParticlePos.z);
+            real3 vectorZ = normalize(make_real3(posZ.x-thisParticlePos.x, posZ.y-thisParticlePos.y, posZ.z-thisParticlePos.z));
             int axisType = particles.w; 
+            real4 posX;
+            real3 vectorX;
+            if (axisType >= 4) {
+                if (fabs(vectorZ.x) < 0.866)
+                    vectorX = make_real3(1, 0, 0);
+                else
+                    vectorX = make_real3(0, 1, 0);
+            }
+            else {
+                posX = posq[particles.x];
+                vectorX = make_real3(posX.x-thisParticlePos.x, posX.y-thisParticlePos.y, posX.z-thisParticlePos.z);
+            }
     
             /*
                 z-only
@@ -74,9 +84,7 @@ extern "C" __global__ void computeLabFrameMoments(real4* __restrict__ posq, int4
             */
         
             // branch based on axis type
-             
-            vectorZ = normalize(vectorZ);
-        
+                    
             if (axisType == 1) {
         
                 // bisector
@@ -108,8 +116,6 @@ extern "C" __global__ void computeLabFrameMoments(real4* __restrict__ posq, int4
                 }
          
             }
-            else if (axisType >= 4)
-                vectorX = make_real3((real) 0.1f);
             
             // x = x - (x.z)z
         
@@ -137,7 +143,7 @@ extern "C" __global__ void computeLabFrameMoments(real4* __restrict__ posq, int4
             // Check the chirality and see whether it needs to be reversed
             
             bool reverse = false;
-            if (axisType != 0 && particles.x >= 0 && particles.y >=0 && particles.z >= 0) {
+            if (axisType == 0 && particles.x >= 0 && particles.y >=0 && particles.z >= 0) {
                 real4 posY = posq[particles.y];
                 real delta[4][3];
 
@@ -358,8 +364,12 @@ extern "C" __global__ void mapTorqueToForce(unsigned long long* __restrict__ for
             norms[U] = normVector(vector[U]);
             if (axisType != 4 && particles.x >= 0)
                 vector[V] = atomPos - trimTo3(posq[particles.x]);
-            else
-                vector[V] = make_real3(0.1f);
+            else {
+                if (fabs(vector[U].x/norms[U]) < 0.866)
+                    vector[V] = make_real3(1, 0, 0);
+                else
+                    vector[V] = make_real3(0, 1, 0);
+            }
             norms[V] = normVector(vector[V]);
         
             // W = UxV
@@ -484,7 +494,7 @@ extern "C" __global__ void mapTorqueToForce(unsigned long long* __restrict__ for
             else if (axisType == 4) {
                 // z-only
         
-                forces[Z] = vector[UV]*dphi[V]/(norms[U]*angles[UV][1]);
+                forces[Z] = vector[UV]*dphi[V]/(norms[U]*angles[UV][1]) + vector[UW]*dphi[W]/norms[U];
                 forces[X] = make_real3(0);
                 forces[Y] = make_real3(0);
                 forces[I] = -forces[Z];
