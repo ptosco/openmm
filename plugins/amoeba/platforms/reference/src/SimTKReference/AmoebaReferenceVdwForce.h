@@ -254,7 +254,7 @@ private:
     double  geometricEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
     double   harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
     double        hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double        mffEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    double        mmffEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
     static double mmffEpsilonCombiningRuleHelper(double combinedSigma,
         double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ);
 

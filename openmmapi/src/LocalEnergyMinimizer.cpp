@@ -109,6 +109,7 @@ int LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxIt
     double workingConstraintTol = std::max(1e-4, constraintTol);
     double k = tolerance/workingConstraintTol;
     lbfgsfloatval_t *x = lbfgs_malloc(numParticles*3);
+    int ret = 0;
     if (x == NULL)
         throw OpenMMException("LocalEnergyMinimizer: Failed to allocate memory");
     try {
@@ -148,7 +149,7 @@ int LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxIt
 
             lbfgsfloatval_t fx;
             MinimizerData data(context, k);
-            lbfgs(numParticles*3, x, &fx, evaluate, NULL, &data, &param);
+            ret = lbfgs(numParticles*3, x, &fx, evaluate, NULL, &data, &param);
 
             // Check whether all constraints are satisfied.
 
