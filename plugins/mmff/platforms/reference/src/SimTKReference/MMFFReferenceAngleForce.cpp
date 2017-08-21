@@ -58,30 +58,30 @@ double MMFFReferenceAngleForce::getPrefactorsGivenAngleCosine(double cosine,
                                                                 double angleCubic,     bool isLinear,
                                                                 double* dEdR) const {
 
-   double angle;
-   if (cosine >= 1.0) {
-      angle = 0.0;
-   } else if (cosine <= -1.0) {
-      angle = RADIAN*PI_M;
-   } else {
-      angle = RADIAN*ACOS(cosine);
-   }   
-   double deltaIdeal         = angle - idealAngle;
-   double deltaIdeal2        = deltaIdeal*deltaIdeal;
-   double deltaIdeal4        = deltaIdeal2*deltaIdeal2;
+    double angle = -1.0;
+    static const double MIN_SINE = 1.0e-8;
+    double energy = MMFF_ANGLE_C1*angleK;
+    if (!(cosine < 1.0)) {
+        angle = 0.0;
+        cosine = 1.0;
+    } else if (!(cosine > -1.0)) {
+        angle = RADIAN*PI_M;
+        cosine = -1.0;
+    }
+    if (isLinear) {
+        double sine = std::max(sqrt(1.0 - cosine*cosine), MIN_SINE);
+        *dEdR                     = -energy*sine;
+        energy                   *= 1.0 + cosine;
+    } else {
+        if (angle < 0.0)
+            angle = RADIAN*ACOS(cosine);
+        double deltaIdeal         = angle - idealAngle;
+        double deltaIdeal2        = deltaIdeal*deltaIdeal;
+        energy                   *= 0.5*deltaIdeal2 * (1.0 + MMFF_ANGLE_CUBIC_K*deltaIdeal);
+        *dEdR                     = RADIAN*MMFF_ANGLE_C1*angleK*deltaIdeal*(1.0 + 1.5*MMFF_ANGLE_CUBIC_K*deltaIdeal);
+    }
 
-   *dEdR                     = (2.0 + 3.0*angleCubic*deltaIdeal +
-                                4.0*angleQuartic*deltaIdeal2     + 
-                                5.0*anglePentic*deltaIdeal3      +
-                                6.0*angleSextic*deltaIdeal4);
-
-   *dEdR                    *= RADIAN*angleK*deltaIdeal;
-
-   double energy             = 1.0f + angleCubic*deltaIdeal + angleQuartic*deltaIdeal2 +
-                               anglePentic*deltaIdeal3 + angleSextic*deltaIdeal4;
-   energy                   *= angleK*deltaIdeal2;
-
-   return energy;
+    return energy;
 
 }
 
@@ -170,7 +170,8 @@ double MMFFReferenceAngleForce::calculateForceAndEnergy(int numAngles, vector<Ve
                                                           const std::vector<int>&  particle3,
                                                           const std::vector<double>&  angle,
                                                           const std::vector<double>&  kQuadratic,
-                                                          double angleCubic, bool isLinear,
+                                                          const std::vector<bool>&  linear,
+                                                          double angleCubic,
                                                           vector<Vec3>& forceData) const {
     double energy = 0.0; 
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(numAngles); ii++) {
@@ -179,6 +180,7 @@ double MMFFReferenceAngleForce::calculateForceAndEnergy(int numAngles, vector<Ve
         int particle3Index = particle3[ii];
         double idealAngle = angle[ii];
         double angleK = kQuadratic[ii];
+        bool isLinear = linear[ii];
         Vec3 forces[3];
         energy += calculateAngleIxn(posData[particle1Index], posData[particle2Index], posData[particle3Index],
                                     idealAngle, angleK, angleCubic, isLinear, forces);

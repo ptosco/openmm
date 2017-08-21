@@ -33,8 +33,8 @@ static const double MDYNE_A_TO_KCAL_MOL = 143.9325;
 static const double MMFF_BOND_C1 = MDYNE_A_TO_KCAL_MOL * KJPerKcal * AngstromsPerNm * AngstromsPerNm;
 static const double MMFF_BOND_CUBIC_K = -2.0 * AngstromsPerNm;
 static const double MMFF_BOND_QUARTIC_K = 7.0 / 12.0 * MMFF_BOND_CUBIC_K * MMFF_BOND_CUBIC_K;
-static const double MMFF_ANGLE_C2 = 0.5 * MDYNE_A_TO_KCAL_MOL * DEGREE_TO_RADIAN * DEGREE_TO_RADIAN;
-static const double MMFF_ANGLE_CUBIC_K = -0.006981317;
+static const double MMFF_ANGLE_C1 = MDYNE_A_TO_KCAL_MOL * KJPerKcal;
+static const double MMFF_ANGLE_CUBIC_K = -0.006981317 * DegreesPerRadian;
 
 } // namespace OpenMM
 

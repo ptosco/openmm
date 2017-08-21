@@ -152,17 +152,16 @@ void ReferenceCalcMMFFAngleForceKernel::initialize(const System& system, const M
     for (int ii = 0; ii < numAngles; ii++) {
         int particle1Index, particle2Index, particle3Index;
         double angleValue, k;
-        force.getAngleParameters(ii, particle1Index, particle2Index, particle3Index, angleValue, k);
+        bool isLinear;
+        force.getAngleParameters(ii, particle1Index, particle2Index, particle3Index, angleValue, k, isLinear);
         particle1.push_back(particle1Index); 
         particle2.push_back(particle2Index); 
         particle3.push_back(particle3Index); 
         angle.push_back(angleValue);
         kQuadratic.push_back(k);
+        linear.push_back(isLinear);
     }
     globalAngleCubic    = force.getMMFFGlobalAngleCubic();
-    globalAngleQuartic  = force.getMMFFGlobalAngleQuartic();
-    globalAnglePentic   = force.getMMFFGlobalAnglePentic();
-    globalAngleSextic   = force.getMMFFGlobalAngleSextic();
     usePeriodic = force.usesPeriodicBoundaryConditions();
 }
 
@@ -173,7 +172,8 @@ double ReferenceCalcMMFFAngleForceKernel::execute(ContextImpl& context, bool inc
     if (usePeriodic)
         mmffReferenceAngleForce.setPeriodic(extractBoxVectors(context));
     double energy = mmffReferenceAngleForce.calculateForceAndEnergy(numAngles, 
-                                       posData, particle1, particle2, particle3, angle, kQuadratic, globalAngleCubic, globalAngleQuartic, globalAnglePentic, globalAngleSextic, forceData);
+                                       posData, particle1, particle2, particle3, angle,
+                                       kQuadratic, linear, globalAngleCubic, forceData);
     return static_cast<double>(energy);
 }
 
@@ -186,11 +186,13 @@ void ReferenceCalcMMFFAngleForceKernel::copyParametersToContext(ContextImpl& con
     for (int i = 0; i < numAngles; ++i) {
         int particle1Index, particle2Index, particle3Index;
         double angleValue, k;
-        force.getAngleParameters(i, particle1Index, particle2Index, particle3Index, angleValue, k);
+        bool isLinear;
+        force.getAngleParameters(i, particle1Index, particle2Index, particle3Index, angleValue, k, isLinear);
         if (particle1Index != particle1[i] || particle2Index != particle2[i] || particle3Index != particle3[i])
             throw OpenMMException("updateParametersInContext: The set of particles in an angle has changed");
         angle[i] = angleValue;
         kQuadratic[i] = k;
+        linear[i] = isLinear;
     }
 }
 

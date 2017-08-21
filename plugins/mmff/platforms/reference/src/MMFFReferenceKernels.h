@@ -117,10 +117,8 @@ private:
     std::vector<int>   particle3;
     std::vector<double> angle;
     std::vector<double> kQuadratic;
+    std::vector<bool> linear;
     double globalAngleCubic;
-    double globalAngleQuartic;
-    double globalAnglePentic;
-    double globalAngleSextic;
     const System& system;
     bool usePeriodic;
 };

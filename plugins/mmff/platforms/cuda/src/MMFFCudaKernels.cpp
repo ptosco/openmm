@@ -172,7 +172,8 @@ public:
     void getParticlesInGroup(int index, std::vector<int>& particles) {
         int particle1, particle2, particle3;
         double angle, k;
-        force.getAngleParameters(index, particle1, particle2, particle3, angle, k);
+        bool isLinear;
+        force.getAngleParameters(index, particle1, particle2, particle3, angle, k, isLinear);
         particles.resize(3);
         particles[0] = particle1;
         particles[1] = particle2;
@@ -181,9 +182,10 @@ public:
     bool areGroupsIdentical(int group1, int group2) {
         int particle1, particle2, particle3;
         double angle1, angle2, k1, k2;
-        force.getAngleParameters(group1, particle1, particle2, particle3, angle1, k1);
-        force.getAngleParameters(group2, particle1, particle2, particle3, angle2, k2);
-        return (angle1 == angle2 && k1 == k2);
+        bool isLinear1, isLinear2;
+        force.getAngleParameters(group1, particle1, particle2, particle3, angle1, k1, isLinear1);
+        force.getAngleParameters(group2, particle1, particle2, particle3, angle2, k2, isLinear2);
+        return (angle1 == angle2 && k1 == k2 && isLinear1 == isLinear2);
     }
 private:
     const MMFFAngleForce& force;
@@ -212,8 +214,9 @@ void CudaCalcMMFFAngleForceKernel::initialize(const System& system, const MMFFAn
     vector<float2> paramVector(numAngles);
     for (int i = 0; i < numAngles; i++) {
         double angle, k;
-        force.getAngleParameters(startIndex+i, atoms[i][0], atoms[i][1], atoms[i][2], angle, k);
-        paramVector[i] = make_float2((float) angle, (float) k);
+        bool isLinear;
+        force.getAngleParameters(startIndex+i, atoms[i][0], atoms[i][1], atoms[i][2], angle, k, isLinear);
+        paramVector[i] = make_float2((float) angle, (float) (isLinear ? -k : k));
     }
     params->upload(paramVector);
     map<string, string> replacements;
@@ -221,9 +224,6 @@ void CudaCalcMMFFAngleForceKernel::initialize(const System& system, const MMFFAn
     replacements["COMPUTE_FORCE"] = CudaMMFFKernelSources::mmffAngleForce;
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float2");
     replacements["CUBIC_K"] = cu.doubleToString(force.getMMFFGlobalAngleCubic());
-    replacements["QUARTIC_K"] = cu.doubleToString(force.getMMFFGlobalAngleQuartic());
-    replacements["PENTIC_K"] = cu.doubleToString(force.getMMFFGlobalAnglePentic());
-    replacements["SEXTIC_K"] = cu.doubleToString(force.getMMFFGlobalAngleSextic());
     replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaKernelSources::angleForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
@@ -249,8 +249,9 @@ void CudaCalcMMFFAngleForceKernel::copyParametersToContext(ContextImpl& context,
     for (int i = 0; i < numAngles; i++) {
         int atom1, atom2, atom3;
         double angle, k;
-        force.getAngleParameters(startIndex+i, atom1, atom2, atom3, angle, k);
-        paramVector[i] = make_float2((float) angle, (float) k);
+        bool isLinear;
+        force.getAngleParameters(startIndex+i, atom1, atom2, atom3, angle, k, isLinear);
+        paramVector[i] = make_float2((float) angle, (float) (isLinear ? -k : k));
     }
     params->upload(paramVector);
     

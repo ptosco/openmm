@@ -86,7 +86,8 @@ public:
                                    const std::vector<int>&  particle3,
                                    const std::vector<double>& angle,
                                    const std::vector<double>& kQuadratic,
-                                   double globalAngleCubic, bool isLinear,
+                                   const std::vector<bool>& linear,
+                                   double globalAngleCubic,
                                    std::vector<OpenMM::Vec3>& forceData) const;
 
 private:

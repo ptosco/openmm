@@ -80,7 +80,6 @@ static void crossProductVector3(double* vectorX, double* vectorY, double* vector
 }
 
 static void getPrefactorsGivenAngleCosine(double cosine, double idealAngle, double quadraticK, double cubicK,
-                                          double quarticK, double penticK, double sexticK,
                                           double* dEdR, double* energyTerm) {
 
     double angle;
@@ -94,24 +93,16 @@ static void getPrefactorsGivenAngleCosine(double cosine, double idealAngle, doub
 
     double deltaIdeal         = angle - idealAngle;
     double deltaIdeal2        = deltaIdeal*deltaIdeal;
-    double deltaIdeal3        = deltaIdeal*deltaIdeal2;
-    double deltaIdeal4        = deltaIdeal2*deltaIdeal2;
  
     // deltaIdeal = r - r_0
  
     *dEdR        = (2.0                        +
-                    3.0*cubicK*  deltaIdeal    +
-                    4.0*quarticK*deltaIdeal2   +
-                    5.0*penticK* deltaIdeal3   +
-                    6.0*sexticK* deltaIdeal4    );
+                    3.0*cubicK*  deltaIdeal);
  
     *dEdR       *= RADIAN*quadraticK*deltaIdeal;
  
 
-    *energyTerm  = 1.0f + cubicK* deltaIdeal    +
-                          quarticK*deltaIdeal2   +
-                          penticK* deltaIdeal3   +
-                          sexticK* deltaIdeal4;
+    *energyTerm  = 1.0f + cubicK* deltaIdeal;
     *energyTerm *= quadraticK*deltaIdeal2;
 
     return;
@@ -123,12 +114,10 @@ static void computeMMFFAngleForce(int bondIndex,  std::vector<Vec3>& positions, 
     int particle1, particle2, particle3;
     double idealAngle;
     double quadraticK;
-    mmffAngleForce.getAngleParameters(bondIndex, particle1, particle2, particle3, idealAngle, quadraticK);
+    bool isLinear;
+    mmffAngleForce.getAngleParameters(bondIndex, particle1, particle2, particle3, idealAngle, quadraticK, isLinear);
 
     double cubicK         = mmffAngleForce.getMMFFGlobalAngleCubic();
-    double quarticK       = mmffAngleForce.getMMFFGlobalAngleQuartic();
-    double penticK        = mmffAngleForce.getMMFFGlobalAnglePentic();
-    double sexticK        = mmffAngleForce.getMMFFGlobalAngleSextic();
 
     double deltaR[2][3];
     double r2_0 = 0.0;
@@ -154,8 +143,7 @@ static void computeMMFFAngleForce(int bondIndex,  std::vector<Vec3>& positions, 
 
     double dEdR;
     double energyTerm;
-    getPrefactorsGivenAngleCosine(cosine, idealAngle, quadraticK, cubicK,
-                                  quarticK, penticK, sexticK, &dEdR, &energyTerm);
+    getPrefactorsGivenAngleCosine(cosine, idealAngle, quadraticK, cubicK, &dEdR, &energyTerm);
 
     double termA  = -dEdR/(r2_0*rp);
     double termC  =  dEdR/(r2_1*rp);
@@ -239,15 +227,10 @@ void testOneAngle() {
     double angle      = 100.0;
     double quadraticK = 1.0;
     double cubicK     = 1.0e-01;
-    double quarticK   = 1.0e-02;
-    double penticK    = 1.0e-03;
-    double sexticK    = 1.0e-04;
-    mmffAngleForce->addAngle(0, 1, 2, angle, quadraticK);
+    bool isLinear = false;
+    mmffAngleForce->addAngle(0, 1, 2, angle, quadraticK, isLinear);
 
     mmffAngleForce->setMMFFGlobalAngleCubic(cubicK);
-    mmffAngleForce->setMMFFGlobalAngleQuartic(quarticK);
-    mmffAngleForce->setMMFFGlobalAnglePentic(penticK);
-    mmffAngleForce->setMMFFGlobalAngleSextic(sexticK);
 
     system.addForce(mmffAngleForce);
     Context context(system, integrator, Platform::getPlatformByName("CUDA"));
@@ -263,7 +246,7 @@ void testOneAngle() {
     
     // Try changing the angle parameters and make sure it's still correct.
     
-    mmffAngleForce->setAngleParameters(0, 0, 1, 2, 1.1*angle, 1.4*quadraticK);
+    mmffAngleForce->setAngleParameters(0, 0, 1, 2, 1.1*angle, 1.4*quadraticK, false);
     bool exceptionThrown = false;
     try {
         // This should throw an exception.
@@ -290,23 +273,15 @@ void testPeriodic() {
     double angle      = 100.0;
     double quadraticK = 1.0;
     double cubicK     = 1.0e-01;
-    double quarticK   = 1.0e-02;
-    double penticK    = 1.0e-03;
-    double sexticK    = 1.0e-04;
-    mmffAngleForce->addAngle(0, 1, 2, angle, quadraticK);
+    bool isLinear     = false;
+    mmffAngleForce->addAngle(0, 1, 2, angle, quadraticK, isLinear);
     mmffAngleForce->setMMFFGlobalAngleCubic(cubicK);
-    mmffAngleForce->setMMFFGlobalAngleQuartic(quarticK);
-    mmffAngleForce->setMMFFGlobalAnglePentic(penticK);
-    mmffAngleForce->setMMFFGlobalAngleSextic(sexticK);
     mmffAngleForce->setUsesPeriodicBoundaryConditions(true);
     system.addForce(mmffAngleForce);
-    CustomAngleForce* customForce = new CustomAngleForce("k2*delta^2 + k3*delta^3 + k4*delta^4 + k5*delta^5 + k6*delta^6; delta=theta-theta0");
+    CustomAngleForce* customForce = new CustomAngleForce("k2*delta^2 + k3*delta^3; delta=theta-theta0");
     customForce->addGlobalParameter("theta0", angle*M_PI/180);
     customForce->addGlobalParameter("k2", quadraticK*pow(180/M_PI, 2.0));
     customForce->addGlobalParameter("k3", cubicK*pow(180/M_PI, 3.0));
-    customForce->addGlobalParameter("k4", quarticK*pow(180/M_PI, 4.0));
-    customForce->addGlobalParameter("k5", penticK*pow(180/M_PI, 5.0));
-    customForce->addGlobalParameter("k6", sexticK*pow(180/M_PI, 6.0));
     customForce->addAngle(0, 1, 2);
     customForce->setUsesPeriodicBoundaryConditions(true);
     customForce->setForceGroup(1);

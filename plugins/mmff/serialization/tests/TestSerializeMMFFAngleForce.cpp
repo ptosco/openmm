@@ -47,13 +47,10 @@ void testSerialization() {
     MMFFAngleForce force1;
     force1.setForceGroup(3);
     force1.setMMFFGlobalAngleCubic(12.3);
-    force1.setMMFFGlobalAngleQuartic(98.7);
-    force1.setMMFFGlobalAnglePentic(91.7);
-    force1.setMMFFGlobalAngleSextic(93.7);
-    force1.addAngle(0, 1, 3, 1.0, 2.0);
-    force1.addAngle(0, 2, 3, 2.0, 2.1);
-    force1.addAngle(2, 3, 5, 3.0, 2.2);
-    force1.addAngle(5, 1, 8, 4.0, 2.3);
+    force1.addAngle(0, 1, 3, 1.0, 2.0, false);
+    force1.addAngle(0, 2, 3, 2.0, 2.1, false);
+    force1.addAngle(2, 3, 5, 3.0, 2.2, false);
+    force1.addAngle(5, 1, 8, 4.0, 2.3, false);
     force1.setUsesPeriodicBoundaryConditions(true);
 
     // Serialize and then deserialize it.
@@ -67,19 +64,18 @@ void testSerialization() {
     ASSERT_EQUAL(force1.getForceGroup(), force2.getForceGroup());
     ASSERT_EQUAL(force1.usesPeriodicBoundaryConditions(), force2.usesPeriodicBoundaryConditions());
     ASSERT_EQUAL(force1.getMMFFGlobalAngleCubic(),   force2.getMMFFGlobalAngleCubic());
-    ASSERT_EQUAL(force1.getMMFFGlobalAngleQuartic(), force2.getMMFFGlobalAngleQuartic());
-    ASSERT_EQUAL(force1.getMMFFGlobalAnglePentic(),  force2.getMMFFGlobalAnglePentic());
-    ASSERT_EQUAL(force1.getMMFFGlobalAngleSextic(),  force2.getMMFFGlobalAngleSextic());
     ASSERT_EQUAL(force1.getNumAngles(),                        force2.getNumAngles());
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(force1.getNumAngles()); ii++) {
         int a1, a2, a3, b1, b2, b3;
         double da, db, ka, kb;
-        force1.getAngleParameters(ii, a1, a2, a3, da, ka);
-        force2.getAngleParameters(ii, b1, b2, b3, db, kb);
+        bool la, lb;
+        force1.getAngleParameters(ii, a1, a2, a3, da, ka, la);
+        force2.getAngleParameters(ii, b1, b2, b3, db, kb, lb);
         ASSERT_EQUAL(a1, b1);
         ASSERT_EQUAL(a2, b2);
         ASSERT_EQUAL(a3, b3);
         ASSERT_EQUAL(da, db);
+        ASSERT_EQUAL(la, lb);
         ASSERT_EQUAL(ka, kb);
     }
 }

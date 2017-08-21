@@ -49,16 +49,14 @@ void MMFFAngleForceProxy::serialize(const void* object, SerializationNode& node)
     node.setIntProperty("forceGroup", force.getForceGroup());
     node.setBoolProperty("usesPeriodic", force.usesPeriodicBoundaryConditions());
     node.setDoubleProperty("cubic",   force.getMMFFGlobalAngleCubic());
-    node.setDoubleProperty("quartic", force.getMMFFGlobalAngleQuartic());
-    node.setDoubleProperty("pentic",  force.getMMFFGlobalAnglePentic());
-    node.setDoubleProperty("sextic",  force.getMMFFGlobalAngleSextic());
 
     SerializationNode& bonds = node.createChildNode("Angles");
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(force.getNumAngles()); ii++) {
         int particle1, particle2, particle3;
         double distance, k;
-        force.getAngleParameters(ii, particle1, particle2, particle3, distance, k);
-        bonds.createChildNode("Angle").setIntProperty("p1", particle1).setIntProperty("p2", particle2).setIntProperty("p3", particle3).setDoubleProperty("d", distance).setDoubleProperty("k", k);
+        bool isLinear;
+        force.getAngleParameters(ii, particle1, particle2, particle3, distance, k, isLinear);
+        bonds.createChildNode("Angle").setIntProperty("p1", particle1).setIntProperty("p2", particle2).setIntProperty("p3", particle3).setDoubleProperty("d", distance).setDoubleProperty("k", k).setBoolProperty("l", isLinear);
     }
 }
 
@@ -73,14 +71,11 @@ void* MMFFAngleForceProxy::deserialize(const SerializationNode& node) const {
         if (version > 2)
             force->setUsesPeriodicBoundaryConditions(node.getBoolProperty("usesPeriodic"));
         force->setMMFFGlobalAngleCubic(node.getDoubleProperty("cubic"));
-        force->setMMFFGlobalAngleQuartic(node.getDoubleProperty("quartic"));
-        force->setMMFFGlobalAnglePentic(node.getDoubleProperty("pentic"));
-        force->setMMFFGlobalAngleSextic(node.getDoubleProperty("sextic"));
 
         const SerializationNode& bonds = node.getChildNode("Angles");
         for (unsigned int ii = 0; ii < bonds.getChildren().size(); ii++) {
             const SerializationNode& bond = bonds.getChildren()[ii];
-            force->addAngle(bond.getIntProperty("p1"), bond.getIntProperty("p2"), bond.getIntProperty("p3"), bond.getDoubleProperty("d"), bond.getDoubleProperty("k"));
+            force->addAngle(bond.getIntProperty("p1"), bond.getIntProperty("p2"), bond.getIntProperty("p3"), bond.getDoubleProperty("d"), bond.getDoubleProperty("k"), bond.getBoolProperty("l"));
         }
     }
     catch (...) {
