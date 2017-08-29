@@ -124,52 +124,6 @@ private:
 };
 
 /**
- * This kernel is invoked by MMFFInPlaneAngleForce to calculate the forces acting on the system and the energy of the system.
- */
-class ReferenceCalcMMFFInPlaneAngleForceKernel : public CalcMMFFInPlaneAngleForceKernel {
-public:
-    ReferenceCalcMMFFInPlaneAngleForceKernel(std::string name, const Platform& platform, const System& system);
-    ~ReferenceCalcMMFFInPlaneAngleForceKernel();
-    /**
-     * Initialize the kernel.
-     * 
-     * @param system     the System this kernel will be applied to
-     * @param force      the MMFFInPlaneAngleForce this kernel will be used for
-     */
-    void initialize(const System& system, const MMFFInPlaneAngleForce& force);
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFInPlaneAngleForce to copy the parameters from
-     */
-    void copyParametersToContext(ContextImpl& context, const MMFFInPlaneAngleForce& force);
-private:
-    int numAngles;
-    std::vector<int>   particle1;
-    std::vector<int>   particle2;
-    std::vector<int>   particle3;
-    std::vector<int>   particle4;
-    std::vector<double> angle;
-    std::vector<double> kQuadratic;
-    double globalInPlaneAngleCubic;
-    double globalInPlaneAngleQuartic;
-    double globalInPlaneAnglePentic;
-    double globalInPlaneAngleSextic;
-    const System& system;
-    bool usePeriodic;
-};
-
-/**
  * This kernel is invoked by MMFFPiTorsionForce to calculate the forces acting on the system and the energy of the system.
  */
 class ReferenceCalcMMFFPiTorsionForceKernel : public CalcMMFFPiTorsionForceKernel {

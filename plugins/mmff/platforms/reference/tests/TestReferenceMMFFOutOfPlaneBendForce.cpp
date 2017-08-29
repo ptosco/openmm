@@ -39,6 +39,7 @@
 #include "OpenMMMMFF.h"
 #include "openmm/System.h"
 #include "openmm/LangevinIntegrator.h"
+#include "openmm/MMFFConstants.h"
 #include <iostream>
 #include <vector>
 
@@ -82,11 +83,6 @@ static void computeMMFFOutOfPlaneBendForce(int bondIndex,  std::vector<Vec3>& po
                                              std::vector<Vec3>& forces, double* energy) {
 
 
-    double kAngleCubic     = mmffOutOfPlaneBendForce.getMMFFGlobalOutOfPlaneBendCubic();
-    double kAngleQuartic   = mmffOutOfPlaneBendForce.getMMFFGlobalOutOfPlaneBendQuartic();
-    double kAnglePentic    = mmffOutOfPlaneBendForce.getMMFFGlobalOutOfPlaneBendPentic();
-    double kAngleSextic    = mmffOutOfPlaneBendForce.getMMFFGlobalOutOfPlaneBendSextic();
-
     int particle1, particle2, particle3, particle4;
     double kAngleQuadratic;
     mmffOutOfPlaneBendForce.getOutOfPlaneBendParameters(bondIndex, particle1, particle2, particle3, particle4, kAngleQuadratic);
@@ -128,7 +124,7 @@ static void computeMMFFOutOfPlaneBendForce(int bondIndex,  std::vector<Vec3>& po
         angle = 0.0;
     }
     else if (cosine <= -1.0) {
-        angle = PI_M;
+        angle = RADIAN*PI_M;
     }
     else {
         angle = RADIAN*acos(cosine);
@@ -138,11 +134,8 @@ static void computeMMFFOutOfPlaneBendForce(int bondIndex,  std::vector<Vec3>& po
  
     double dt    = angle;
     double dt2   = dt*dt;
-    double dt3   = dt2*dt;
-    double dt4   = dt2*dt2;
  
-    double dEdDt = 2.0 + 3.0*kAngleCubic*dt  + 4.0*kAngleQuartic*dt2 + 5.0*kAnglePentic *dt3 + 6.0*kAngleSextic *dt4;
-     dEdDt      *= kAngleQuadratic*dt*RADIAN;
+    double dEdDt = RADIAN*MMFF_OOP_C1*kAngleQuadratic*dt;
  
     double dEdCos;
     dEdCos       = dEdDt/sqrt(cc*bkk2);
@@ -219,11 +212,7 @@ static void computeMMFFOutOfPlaneBendForce(int bondIndex,  std::vector<Vec3>& po
  
     // calculate energy if 'energy' is set
  
-    double energyTerm  = 1.0 + kAngleCubic  *dt  +
-                               kAngleQuartic*dt2 +
-                               kAnglePentic *dt3 +
-                               kAngleSextic *dt4;
-    energyTerm        *= kAngleQuadratic*dt2;
+    double energyTerm  = 0.5*MMFF_OOP_C1*kAngleQuadratic*dt2;
     *energy           += energyTerm;
     return;
 }
@@ -277,11 +266,6 @@ void testOneOutOfPlaneBend() {
 
     MMFFOutOfPlaneBendForce* mmffOutOfPlaneBendForce = new MMFFOutOfPlaneBendForce();
 
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendCubic( -0.1400000E-01);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendQuartic(0.5600000E-04);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendPentic(-0.7000000E-06);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendSextic( 0.2200000E-07);
-
     double kOutOfPlaneBend = 0.328682196E-01;
     mmffOutOfPlaneBendForce->addOutOfPlaneBend(0, 1, 2, 3, kOutOfPlaneBend);
 
@@ -328,11 +312,6 @@ void testOneOutOfPlaneBend2(int setId) {
     LangevinIntegrator integrator(0.0, 0.1, 0.01);
 
     MMFFOutOfPlaneBendForce* mmffOutOfPlaneBendForce = new MMFFOutOfPlaneBendForce();
-
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendCubic( -0.1400000E-01);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendQuartic(0.5600000E-04);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendPentic(-0.7000000E-06);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendSextic( 0.2200000E-07);
 /*
    285    441    442    443    444  0.328682196E-01
    286    441    442    444    443  0.164493407E-01
@@ -471,10 +450,6 @@ void testPeriodic() {
         system.addParticle(1.0);
     LangevinIntegrator integrator(0.0, 0.1, 0.01);
     MMFFOutOfPlaneBendForce* mmffOutOfPlaneBendForce = new MMFFOutOfPlaneBendForce();
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendCubic( -0.1400000E-01);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendQuartic(0.5600000E-04);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendPentic(-0.7000000E-06);
-    mmffOutOfPlaneBendForce->setMMFFGlobalOutOfPlaneBendSextic( 0.2200000E-07);
     double kOutOfPlaneBend = 0.328682196E-01;
     mmffOutOfPlaneBendForce->addOutOfPlaneBend(0, 1, 2, 3, kOutOfPlaneBend);
     mmffOutOfPlaneBendForce->setUsesPeriodicBoundaryConditions(true);

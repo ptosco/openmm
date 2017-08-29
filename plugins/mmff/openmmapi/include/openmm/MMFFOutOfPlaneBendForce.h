@@ -62,62 +62,6 @@ public:
         return outOfPlaneBends.size();
     }
 
-    /** 
-     * Set the global cubic term
-     * 
-     * @param cubicK        the cubic force constant for the angle
-     */
-    void setMMFFGlobalOutOfPlaneBendCubic(double cubicK);
-
-    /** 
-     * Get the global cubic term
-     * 
-     * @return global cubicK term
-     */
-    double getMMFFGlobalOutOfPlaneBendCubic() const;
-
-    /** 
-     * Set the global cubic term
-     * 
-     * @param quarticK       the quartic force constant for the angle
-     */
-    void setMMFFGlobalOutOfPlaneBendQuartic(double quarticK);
-
-    /** 
-     * Get the global quartic term
-     * 
-     * @return global  quartic term
-     */
-    double getMMFFGlobalOutOfPlaneBendQuartic() const;
-
-    /** 
-     * Set the global pentic term
-     * 
-     * @param penticK the pentic force constant for the angle
-     */
-    void setMMFFGlobalOutOfPlaneBendPentic(double penticK);
-
-    /** 
-     * Get the global pentic term
-     * 
-     * @return global penticK term
-     */
-    double getMMFFGlobalOutOfPlaneBendPentic() const;
-
-    /** 
-     * Set the global sextic term
-     * 
-     * @param sexticK       the sextic force constant for the angle
-     */
-    void setMMFFGlobalOutOfPlaneBendSextic(double sexticK);
-
-    /** 
-     * Get the global sextic term
-     * 
-     * @return global sexticK term
-     */
-    double getMMFFGlobalOutOfPlaneBendSextic() const;
-
     /**
      * Add an out-of-plane bend term to the force field.
      *
@@ -177,7 +121,6 @@ public:
     bool usesPeriodicBoundaryConditions() const;
 protected:
     ForceImpl* createImpl() const;
-    double _globalCubicK, _globalQuarticK, _globalPenticK, _globalSexticK;
 private:
     class OutOfPlaneBendInfo;
     std::vector<OutOfPlaneBendInfo> outOfPlaneBends;

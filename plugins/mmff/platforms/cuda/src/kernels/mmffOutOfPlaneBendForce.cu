@@ -38,14 +38,11 @@ real angle = abs(ASIN(adXcd_dot_db));
 // find the out-of-plane energy and master chain rule terms
 
 real dt = RAD_TO_DEG*angle;
-real dt2 = dt * dt;
-real dt3 = dt2 * dt;
-real dt4 = dt2 * dt2;
 float k = (rdb2 != 0 && cc != 0) ? PARAMS[index] : 0.0f;
 
-energy += k*dt2*(1.0f + CUBIC_K*dt + QUARTIC_K*dt2 + PENTIC_K*dt3 + SEXTIC_K*dt4);
-
-real deddt = k*dt*RAD_TO_DEG*(2.0f + 3.0f*CUBIC_K*dt + 4.0f*QUARTIC_K*dt2 + 5.0f*PENTIC_K*dt3 + 6.0f*SEXTIC_K*dt4);
+real deddt = MMFF_OOP_C1*k*dt;
+energy += 0.5f*deddt*dt;
+deddt *= RAD_TO_DEG;
 
 real eeSign = (ee >= 0 ? 1 : -1);
 real dedcos = -deddt*eeSign/SQRT(cc*bkk2);

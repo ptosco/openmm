@@ -225,6 +225,7 @@ void CudaCalcMMFFAngleForceKernel::initialize(const System& system, const MMFFAn
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float2");
     replacements["CUBIC_K"] = cu.doubleToString(force.getMMFFGlobalAngleCubic());
     replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
+    replacements["MMFF_ANGLE_C1"] = cu.doubleToString(MMFF_ANGLE_C1);
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaKernelSources::angleForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
 }
@@ -252,107 +253,6 @@ void CudaCalcMMFFAngleForceKernel::copyParametersToContext(ContextImpl& context,
         bool isLinear;
         force.getAngleParameters(startIndex+i, atom1, atom2, atom3, angle, k, isLinear);
         paramVector[i] = make_float2((float) angle, (float) (isLinear ? -k : k));
-    }
-    params->upload(paramVector);
-    
-    // Mark that the current reordering may be invalid.
-    
-    cu.invalidateMolecules();
-}
-
-/* -------------------------------------------------------------------------- *
- *                            MMFFInPlaneAngleForce                         *
- * -------------------------------------------------------------------------- */
-
-class CudaCalcMMFFInPlaneAngleForceKernel::ForceInfo : public CudaForceInfo {
-public:
-    ForceInfo(const MMFFInPlaneAngleForce& force) : force(force) {
-    }
-    int getNumParticleGroups() {
-        return force.getNumAngles();
-    }
-    void getParticlesInGroup(int index, std::vector<int>& particles) {
-        int particle1, particle2, particle3, particle4;
-        double angle, k;
-        force.getAngleParameters(index, particle1, particle2, particle3, particle4, angle, k);
-        particles.resize(4);
-        particles[0] = particle1;
-        particles[1] = particle2;
-        particles[2] = particle3;
-        particles[3] = particle4;
-    }
-    bool areGroupsIdentical(int group1, int group2) {
-        int particle1, particle2, particle3, particle4;
-        double angle1, angle2, k1, k2;
-        force.getAngleParameters(group1, particle1, particle2, particle3, particle4, angle1, k1);
-        force.getAngleParameters(group2, particle1, particle2, particle3, particle4, angle2, k2);
-        return (angle1 == angle2 && k1 == k2);
-    }
-private:
-    const MMFFInPlaneAngleForce& force;
-};
-
-CudaCalcMMFFInPlaneAngleForceKernel::CudaCalcMMFFInPlaneAngleForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) : 
-          CalcMMFFInPlaneAngleForceKernel(name, platform), cu(cu), system(system), params(NULL) {
-}
-
-CudaCalcMMFFInPlaneAngleForceKernel::~CudaCalcMMFFInPlaneAngleForceKernel() {
-    cu.setAsCurrent();
-    if (params != NULL)
-        delete params;
-}
-
-void CudaCalcMMFFInPlaneAngleForceKernel::initialize(const System& system, const MMFFInPlaneAngleForce& force) {
-    cu.setAsCurrent();
-    int numContexts = cu.getPlatformData().contexts.size();
-    int startIndex = cu.getContextIndex()*force.getNumAngles()/numContexts;
-    int endIndex = (cu.getContextIndex()+1)*force.getNumAngles()/numContexts;
-    numAngles = endIndex-startIndex;
-    if (numAngles == 0)
-        return;
-    vector<vector<int> > atoms(numAngles, vector<int>(4));
-    params = CudaArray::create<float2>(cu, numAngles, "angleParams");
-    vector<float2> paramVector(numAngles);
-    for (int i = 0; i < numAngles; i++) {
-        double angle, k;
-        force.getAngleParameters(startIndex+i, atoms[i][0], atoms[i][1], atoms[i][2], atoms[i][3], angle, k);
-        paramVector[i] = make_float2((float) angle, (float) k);
-    }
-    params->upload(paramVector);
-    map<string, string> replacements;
-    replacements["APPLY_PERIODIC"] = (force.usesPeriodicBoundaryConditions() ? "1" : "0");
-    replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float2");
-    replacements["CUBIC_K"] = cu.doubleToString(force.getMMFFGlobalInPlaneAngleCubic());
-    replacements["QUARTIC_K"] = cu.doubleToString(force.getMMFFGlobalInPlaneAngleQuartic());
-    replacements["PENTIC_K"] = cu.doubleToString(force.getMMFFGlobalInPlaneAnglePentic());
-    replacements["SEXTIC_K"] = cu.doubleToString(force.getMMFFGlobalInPlaneAngleSextic());
-    replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
-    cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaMMFFKernelSources::mmffInPlaneForce, replacements), force.getForceGroup());
-    cu.addForce(new ForceInfo(force));
-}
-
-double CudaCalcMMFFInPlaneAngleForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-    return 0.0;
-}
-
-void CudaCalcMMFFInPlaneAngleForceKernel::copyParametersToContext(ContextImpl& context, const MMFFInPlaneAngleForce& force) {
-    cu.setAsCurrent();
-    int numContexts = cu.getPlatformData().contexts.size();
-    int startIndex = cu.getContextIndex()*force.getNumAngles()/numContexts;
-    int endIndex = (cu.getContextIndex()+1)*force.getNumAngles()/numContexts;
-    if (numAngles != endIndex-startIndex)
-        throw OpenMMException("updateParametersInContext: The number of in-plane angles has changed");
-    if (numAngles == 0)
-        return;
-    
-    // Record the per-angle parameters.
-    
-    vector<float2> paramVector(numAngles);
-    for (int i = 0; i < numAngles; i++) {
-        int atom1, atom2, atom3, atom4;
-        double angle, k;
-        force.getAngleParameters(startIndex+i, atom1, atom2, atom3, atom4, angle, k);
-        paramVector[i] = make_float2((float) angle, (float) k);
     }
     params->upload(paramVector);
     
@@ -627,11 +527,8 @@ void CudaCalcMMFFOutOfPlaneBendForceKernel::initialize(const System& system, con
     map<string, string> replacements;
     replacements["APPLY_PERIODIC"] = (force.usesPeriodicBoundaryConditions() ? "1" : "0");
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float");
-    replacements["CUBIC_K"] = cu.doubleToString(force.getMMFFGlobalOutOfPlaneBendCubic());
-    replacements["QUARTIC_K"] = cu.doubleToString(force.getMMFFGlobalOutOfPlaneBendQuartic());
-    replacements["PENTIC_K"] = cu.doubleToString(force.getMMFFGlobalOutOfPlaneBendPentic());
-    replacements["SEXTIC_K"] = cu.doubleToString(force.getMMFFGlobalOutOfPlaneBendSextic());
     replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
+    replacements["MMFF_OOP_C1"] = cu.doubleToString(MMFF_OOP_C1);
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaMMFFKernelSources::mmffOutOfPlaneBendForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
 }

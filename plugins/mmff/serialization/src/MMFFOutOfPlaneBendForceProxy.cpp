@@ -46,10 +46,6 @@ void MMFFOutOfPlaneBendForceProxy::serialize(const void* object, SerializationNo
     const MMFFOutOfPlaneBendForce& force = *reinterpret_cast<const MMFFOutOfPlaneBendForce*>(object);
     node.setIntProperty("forceGroup", force.getForceGroup());
     node.setBoolProperty("usesPeriodic", force.usesPeriodicBoundaryConditions());
-    node.setDoubleProperty("cubic",   force.getMMFFGlobalOutOfPlaneBendCubic());
-    node.setDoubleProperty("quartic", force.getMMFFGlobalOutOfPlaneBendQuartic());
-    node.setDoubleProperty("pentic",  force.getMMFFGlobalOutOfPlaneBendPentic());
-    node.setDoubleProperty("sextic",  force.getMMFFGlobalOutOfPlaneBendSextic());
 
     SerializationNode& bonds = node.createChildNode("OutOfPlaneBend");
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(force.getNumOutOfPlaneBends()); ii++) {
@@ -70,10 +66,6 @@ void* MMFFOutOfPlaneBendForceProxy::deserialize(const SerializationNode& node) c
             force->setForceGroup(node.getIntProperty("forceGroup", 0));
         if (version > 2)
             force->setUsesPeriodicBoundaryConditions(node.getBoolProperty("usesPeriodic"));
-        force->setMMFFGlobalOutOfPlaneBendCubic(node.getDoubleProperty("cubic"));
-        force->setMMFFGlobalOutOfPlaneBendQuartic(node.getDoubleProperty("quartic"));
-        force->setMMFFGlobalOutOfPlaneBendPentic(node.getDoubleProperty("pentic"));
-        force->setMMFFGlobalOutOfPlaneBendSextic(node.getDoubleProperty("sextic"));
 
         const SerializationNode& bonds = node.getChildNode("OutOfPlaneBend");
         for (unsigned int ii = 0; ii < bonds.getChildren().size(); ii++) {

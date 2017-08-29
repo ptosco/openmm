@@ -50,7 +50,6 @@ extern "C" OPENMM_EXPORT void registerKernelFactories() {
         MMFFCudaKernelFactory* factory = new MMFFCudaKernelFactory();
         platform.registerKernelFactory(CalcMMFFBondForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFAngleForceKernel::Name(), factory);
-        platform.registerKernelFactory(CalcMMFFInPlaneAngleForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFPiTorsionForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFStretchBendForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFOutOfPlaneBendForceKernel::Name(), factory);
@@ -84,9 +83,6 @@ KernelImpl* MMFFCudaKernelFactory::createKernelImpl(std::string name, const Plat
 
     if (name == CalcMMFFAngleForceKernel::Name())
         return new CudaCalcMMFFAngleForceKernel(name, platform, cu, context.getSystem());
-
-    if (name == CalcMMFFInPlaneAngleForceKernel::Name())
-        return new CudaCalcMMFFInPlaneAngleForceKernel(name, platform, cu, context.getSystem());
 
     if (name == CalcMMFFPiTorsionForceKernel::Name())
         return new CudaCalcMMFFPiTorsionForceKernel(name, platform, cu, context.getSystem());

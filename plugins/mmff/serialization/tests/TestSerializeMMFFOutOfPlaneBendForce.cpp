@@ -47,10 +47,6 @@ void testSerialization() {
     MMFFOutOfPlaneBendForce force1;
 
     force1.setForceGroup(3);
-    force1.setMMFFGlobalOutOfPlaneBendCubic(12.3);
-    force1.setMMFFGlobalOutOfPlaneBendQuartic(98.7);
-    force1.setMMFFGlobalOutOfPlaneBendPentic(91.7);
-    force1.setMMFFGlobalOutOfPlaneBendSextic(93.7);
 
     force1.addOutOfPlaneBend(0, 1, 3, 4, 2.0);
     force1.addOutOfPlaneBend(0, 2, 3, 5, 2.1);
@@ -69,10 +65,6 @@ void testSerialization() {
 
     ASSERT_EQUAL(force1.getForceGroup(), force2.getForceGroup());
     ASSERT_EQUAL(force1.usesPeriodicBoundaryConditions(), force2.usesPeriodicBoundaryConditions());
-    ASSERT_EQUAL(force1.getMMFFGlobalOutOfPlaneBendCubic(), force2.getMMFFGlobalOutOfPlaneBendCubic());
-    ASSERT_EQUAL(force1.getMMFFGlobalOutOfPlaneBendQuartic(), force2.getMMFFGlobalOutOfPlaneBendQuartic());
-    ASSERT_EQUAL(force1.getMMFFGlobalOutOfPlaneBendPentic(), force2.getMMFFGlobalOutOfPlaneBendPentic());
-    ASSERT_EQUAL(force1.getMMFFGlobalOutOfPlaneBendSextic(), force2.getMMFFGlobalOutOfPlaneBendSextic());
     ASSERT_EQUAL(force1.getNumOutOfPlaneBends(), force2.getNumOutOfPlaneBends());
 
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(force1.getNumOutOfPlaneBends()); ii++) {

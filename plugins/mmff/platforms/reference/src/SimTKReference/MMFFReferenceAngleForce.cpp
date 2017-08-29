@@ -76,9 +76,9 @@ double MMFFReferenceAngleForce::getPrefactorsGivenAngleCosine(double cosine,
         if (angle < 0.0)
             angle = RADIAN*ACOS(cosine);
         double deltaIdeal         = angle - idealAngle;
-        double deltaIdeal2        = deltaIdeal*deltaIdeal;
-        energy                   *= 0.5*deltaIdeal2 * (1.0 + MMFF_ANGLE_CUBIC_K*deltaIdeal);
-        *dEdR                     = RADIAN*MMFF_ANGLE_C1*angleK*deltaIdeal*(1.0 + 1.5*MMFF_ANGLE_CUBIC_K*deltaIdeal);
+        double p = MMFF_ANGLE_CUBIC_K*deltaIdeal;
+        *dEdR                     = RADIAN*energy*deltaIdeal*(1.0 + 1.5*p);
+        energy                   *= 0.5*deltaIdeal*deltaIdeal*(1.0 + p);
     }
 
     return energy;

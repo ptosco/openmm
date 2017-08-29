@@ -44,13 +44,11 @@ void MMFFReferenceStretchBendForce::setPeriodic(OpenMM::Vec3* vectors) {
    @param positionAtomA           Cartesian coordinates of atom A
    @param positionAtomB           Cartesian coordinates of atom B
    @param positionAtomC           Cartesian coordinates of atom C
-   @param positionAtomD           Cartesian coordinates of atom D
-   @param angleLength             angle
-   @param angleK                  quadratic angle force
-   @param angleCubic              cubic angle force parameter
-   @param angleQuartic            quartic angle force parameter
-   @param anglePentic             pentic angle force parameter
-   @param angleSextic             sextic angle force parameter
+   @param lengthAB                ideal AB bondlength
+   @param lengthCB                ideal CB bondlength
+   @param idealAngle              ideal angle
+   @param k1Parameter             k for distance A-B * angle A-B-C
+   @param k2Parameter             k for distance B-C * angle A-B-C
    @param forces                  force vector
 
    @return energy
@@ -97,12 +95,12 @@ double MMFFReferenceStretchBendForce::calculateStretchBendIxn(const Vec3& positi
     double cosine = dot/(rAB*rCB);
  
     double angle;
-    if (cosine >= 1.0) {
+    if (!(cosine < 1.0)) {
        angle = 0.0;
-    } else if (cosine <= -1.0) {
-       angle = M_PI;
+    } else if (!(cosine > -1.0)) {
+       angle = RADIAN*PI_M;
     } else {
-       angle = RADIAN*acos(cosine);
+       angle = RADIAN*ACOS(cosine);
     }
  
     double termA = -RADIAN/(rAB2*rP);

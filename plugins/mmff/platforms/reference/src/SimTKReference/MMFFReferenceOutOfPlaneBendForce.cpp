@@ -25,6 +25,7 @@
 #include "MMFFReferenceForce.h"
 #include "MMFFReferenceOutOfPlaneBendForce.h"
 #include "SimTKOpenMMRealType.h"
+#include "openmm/MMFFConstants.h"
 
 using std::vector;
 using namespace OpenMM;
@@ -46,10 +47,6 @@ void MMFFReferenceOutOfPlaneBendForce::setPeriodic(OpenMM::Vec3* vectors) {
    @param positionAtomD           Cartesian coordinates of atom D
    @param angleLength             angle
    @param angleK                  quadratic angle force
-   @param angleCubic              cubic angle force parameter
-   @param angleQuartic            quartic angle force parameter
-   @param anglePentic             pentic angle force parameter
-   @param angleSextic             sextic angle force parameter
    @param forces                  force vector
 
    @return energy
@@ -58,10 +55,7 @@ void MMFFReferenceOutOfPlaneBendForce::setPeriodic(OpenMM::Vec3* vectors) {
 
 double MMFFReferenceOutOfPlaneBendForce::calculateOutOfPlaneBendIxn(const Vec3& positionAtomA, const Vec3& positionAtomB,
                                                                       const Vec3& positionAtomC, const Vec3& positionAtomD,
-                                                                      double angleK,
-                                                                      double angleCubic,                 double angleQuartic,
-                                                                      double anglePentic,                double angleSextic,
-                                                                      Vec3* forces) const {
+                                                                      double angleK, Vec3* forces) const {
 
     enum { A, B, C, D, LastAtomIndex };
     enum { AB, CB, DB, AD, CD, LastDeltaIndex };
@@ -104,25 +98,23 @@ double MMFFReferenceOutOfPlaneBendForce::calculateOutOfPlaneBendIxn(const Vec3& 
     double bkk2   = rDB2 - eE*eE/cc;
     double cosine = sqrt(bkk2/rDB2);
     double angle;
-    if (cosine >= 1.0) {
+    if (!(cosine < 1.0)) {
        angle = 0.0;
-    } else if (cosine <= -1.0) {
-       angle = M_PI;
+    } else if (!(cosine > -1.0)) {
+       angle = RADIAN*PI_M;
     } else {
-       angle = RADIAN*acos(cosine);
+       angle = RADIAN*ACOS(cosine);
     }
  
     // chain rule
  
     double dt    = angle;
     double dt2   = dt*dt;
-    double dt3   = dt2*dt;
-    double dt4   = dt2*dt2;
  
-    double dEdDt = 2.0 + 3.0*angleCubic*dt + 4.0*angleQuartic*dt2 +
-                   5.0*anglePentic*dt3 + 6.0*angleSextic*dt4;
- 
-          dEdDt     *= angleK*dt*RADIAN;
+    double dEdDt = MMFF_OOP_C1*angleK*dt;
+    // calculate energy if 'energy' is set
+    double energy = 0.5*dEdDt*dt;
+    dEdDt *= RADIAN;
  
     double dEdCos  = dEdDt/sqrt(cc*bkk2);
     if (eE > 0.0) {
@@ -191,11 +183,6 @@ double MMFFReferenceOutOfPlaneBendForce::calculateOutOfPlaneBendIxn(const Vec3& 
  
     // ---------------------------------------------------------------------------------------
  
-    // calculate energy if 'energy' is set
- 
-    double energy = 1.0 + angleCubic*dt + angleQuartic*dt2 + anglePentic*dt3 + angleSextic*dt4;
-    energy *= angleK*dt2;
-
     return energy;
 }
 
@@ -205,10 +192,6 @@ double MMFFReferenceOutOfPlaneBendForce::calculateForceAndEnergy(int numOutOfPla
                                                                    const std::vector<int>&  particle3,
                                                                    const std::vector<int>&  particle4,
                                                                    const std::vector<double>&  kQuadratic,
-                                                                   double angleCubic,
-                                                                   double angleQuartic,
-                                                                   double anglePentic,
-                                                                   double angleSextic,
                                                                    vector<Vec3>& forceData) const {
     double energy      = 0.0; 
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(numOutOfPlaneBends); ii++) {
@@ -219,7 +202,7 @@ double MMFFReferenceOutOfPlaneBendForce::calculateForceAndEnergy(int numOutOfPla
         double kAngle           = kQuadratic[ii];
         Vec3 forces[4];
         energy                 += calculateOutOfPlaneBendIxn(posData[particle1Index], posData[particle2Index], posData[particle3Index], posData[particle4Index],
-                                                              kAngle, angleCubic, angleQuartic, anglePentic, angleSextic, forces);
+                                                              kAngle, forces);
         for (int jj = 0; jj < 3; jj++) {
             forceData[particle1Index][jj] -= forces[0][jj];
             forceData[particle2Index][jj] -= forces[1][jj];

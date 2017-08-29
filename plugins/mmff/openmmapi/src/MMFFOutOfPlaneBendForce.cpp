@@ -37,43 +37,6 @@
 using namespace OpenMM;
 
 MMFFOutOfPlaneBendForce::MMFFOutOfPlaneBendForce() : usePeriodic(false) {
-    _globalCubicK     = -0.1400000E-01;
-    _globalQuarticK   =  0.5600000E-04;
-    _globalPenticK    = -0.7000000E-06;
-    _globalSexticK    =  0.2200000E-07;
-
-}
-
-double MMFFOutOfPlaneBendForce::getMMFFGlobalOutOfPlaneBendCubic() const {
-    return _globalCubicK;
-}
-
-void MMFFOutOfPlaneBendForce::setMMFFGlobalOutOfPlaneBendCubic(double cubicK) {
-    _globalCubicK           = cubicK;
-}
-
-double MMFFOutOfPlaneBendForce::getMMFFGlobalOutOfPlaneBendQuartic() const {
-    return _globalQuarticK;
-}
-
-void MMFFOutOfPlaneBendForce::setMMFFGlobalOutOfPlaneBendQuartic(double quarticK) {
-    _globalQuarticK         = quarticK;
-}
-
-double MMFFOutOfPlaneBendForce::getMMFFGlobalOutOfPlaneBendPentic() const {
-    return _globalPenticK;
-}
-
-void MMFFOutOfPlaneBendForce::setMMFFGlobalOutOfPlaneBendPentic(double penticK) {
-    _globalPenticK           = penticK;
-}
-
-double MMFFOutOfPlaneBendForce::getMMFFGlobalOutOfPlaneBendSextic() const {
-    return _globalSexticK;
-}
-
-void MMFFOutOfPlaneBendForce::setMMFFGlobalOutOfPlaneBendSextic(double sexticK) {
-    _globalSexticK         = sexticK;
 }
 
 int MMFFOutOfPlaneBendForce::addOutOfPlaneBend(int particle1, int particle2, int particle3, int particle4, double k) {

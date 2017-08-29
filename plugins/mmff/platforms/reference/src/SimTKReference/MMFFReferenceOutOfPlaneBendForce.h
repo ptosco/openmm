@@ -71,10 +71,6 @@ public:
         @param particle3               particle 3 indices
         @param particle4               particle 4 indices
         @param kAngle                  angle force constant
-        @param angleCubic              cubic force parameter
-        @param angleQuartic            quartic force parameter
-        @param anglePentic             pentic force parameter
-        @param angleSexic              sextic force parameter
         @param forces                  output force vector
      
         @return total energy
@@ -88,10 +84,6 @@ public:
                                    const std::vector<int>&  particle3,
                                    const std::vector<int>&  particle4,
                                    const std::vector<double>&  kAngle,
-                                   double angleCubic,
-                                   double angleQuartic,
-                                   double anglePentic,
-                                   double angleSextic,
                                    std::vector<OpenMM::Vec3>& forceData) const;
 
 private:
@@ -108,10 +100,6 @@ private:
        @param positionAtomC           Cartesian coordinates of atom C
        @param positionAtomD           Cartesian coordinates of atom D
        @param angleK                  quadratic angle force parameter
-       @param angleCubic              cubic     angle force parameter
-       @param angleQuartic            quartic   angle force parameter
-       @param anglePentic             pentic    angle force parameter
-       @param angleSextic             sextic    angle force parameter
        @param forces                  force vector
     
        @return energy
@@ -120,10 +108,7 @@ private:
     
     double calculateOutOfPlaneBendIxn(const OpenMM::Vec3& positionAtomA, const OpenMM::Vec3& positionAtomB,
                                      const OpenMM::Vec3& positionAtomC, const OpenMM::Vec3& positionAtomD,
-                                     double angleK,
-                                     double angleCubic,     double angleQuartic,
-                                     double anglePentic,    double angleSextic,
-                                     OpenMM::Vec3* forces) const;
+                                     double angleK, OpenMM::Vec3* forces) const;
 };
 
 } // namespace OpenMM

@@ -50,7 +50,6 @@ extern "C" OPENMM_EXPORT void registerKernelFactories() {
              MMFFReferenceKernelFactory* factory = new MMFFReferenceKernelFactory();
              platform.registerKernelFactory(CalcMMFFBondForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFAngleForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFInPlaneAngleForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFPiTorsionForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFStretchBendForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFOutOfPlaneBendForceKernel::Name(), factory);
@@ -77,9 +76,6 @@ KernelImpl* MMFFReferenceKernelFactory::createKernelImpl(std::string name, const
 
     if (name == CalcMMFFAngleForceKernel::Name())
         return new ReferenceCalcMMFFAngleForceKernel(name, platform, context.getSystem());
-
-    if (name == CalcMMFFInPlaneAngleForceKernel::Name())
-        return new ReferenceCalcMMFFInPlaneAngleForceKernel(name, platform, context.getSystem());
 
     if (name == CalcMMFFPiTorsionForceKernel::Name())
         return new ReferenceCalcMMFFPiTorsionForceKernel(name, platform, context.getSystem());

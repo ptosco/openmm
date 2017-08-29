@@ -43,7 +43,6 @@
 #include "openmm/MMFFGeneralizedKirkwoodForce.h"
 #include "openmm/MMFFBondForce.h"
 #include "openmm/MMFFAngleForce.h"
-#include "openmm/MMFFInPlaneAngleForce.h"
 #include "openmm/MMFFMultipoleForce.h"
 #include "openmm/MMFFOutOfPlaneBendForce.h"
 #include "openmm/MMFFPiTorsionForce.h"
@@ -57,7 +56,6 @@
 #include "openmm/serialization/MMFFGeneralizedKirkwoodForceProxy.h"
 #include "openmm/serialization/MMFFBondForceProxy.h"
 #include "openmm/serialization/MMFFAngleForceProxy.h"
-#include "openmm/serialization/MMFFInPlaneAngleForceProxy.h"
 #include "openmm/serialization/MMFFMultipoleForceProxy.h"
 #include "openmm/serialization/MMFFOutOfPlaneBendForceProxy.h"
 #include "openmm/serialization/MMFFPiTorsionForceProxy.h"
@@ -84,7 +82,6 @@ extern "C" OPENMM_EXPORT_MMFF void registerMMFFSerializationProxies() {
     SerializationProxy::registerProxy(typeid(MMFFGeneralizedKirkwoodForce),         new MMFFGeneralizedKirkwoodForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFBondForce),                new MMFFBondForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFAngleForce),               new MMFFAngleForceProxy());
-    SerializationProxy::registerProxy(typeid(MMFFInPlaneAngleForce),        new MMFFInPlaneAngleForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFMultipoleForce),                   new MMFFMultipoleForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFOutOfPlaneBendForce),              new MMFFOutOfPlaneBendForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFPiTorsionForce),                   new MMFFPiTorsionForceProxy());

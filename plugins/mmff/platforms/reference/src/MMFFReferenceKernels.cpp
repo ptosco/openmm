@@ -27,7 +27,6 @@
 #include "MMFFReferenceKernels.h"
 #include "MMFFReferenceBondForce.h"
 #include "MMFFReferenceAngleForce.h"
-#include "MMFFReferenceInPlaneAngleForce.h"
 #include "MMFFReferencePiTorsionForce.h"
 #include "MMFFReferenceStretchBendForce.h"
 #include "MMFFReferenceOutOfPlaneBendForce.h"
@@ -196,64 +195,6 @@ void ReferenceCalcMMFFAngleForceKernel::copyParametersToContext(ContextImpl& con
     }
 }
 
-ReferenceCalcMMFFInPlaneAngleForceKernel::ReferenceCalcMMFFInPlaneAngleForceKernel(std::string name, const Platform& platform, const System& system) : 
-          CalcMMFFInPlaneAngleForceKernel(name, platform), system(system) {
-}
-
-ReferenceCalcMMFFInPlaneAngleForceKernel::~ReferenceCalcMMFFInPlaneAngleForceKernel() {
-}
-
-void ReferenceCalcMMFFInPlaneAngleForceKernel::initialize(const System& system, const MMFFInPlaneAngleForce& force) {
-
-    numAngles = force.getNumAngles();
-    for (int ii = 0; ii < numAngles; ii++) {
-        int particle1Index, particle2Index, particle3Index, particle4Index;
-        double angleValue, k;
-        force.getAngleParameters(ii, particle1Index, particle2Index, particle3Index, particle4Index, angleValue, k);
-        particle1.push_back(particle1Index); 
-        particle2.push_back(particle2Index); 
-        particle3.push_back(particle3Index); 
-        particle4.push_back(particle4Index); 
-        angle.push_back(angleValue);
-        kQuadratic.push_back(k);
-    }
-    globalInPlaneAngleCubic    = force.getMMFFGlobalInPlaneAngleCubic();
-    globalInPlaneAngleQuartic  = force.getMMFFGlobalInPlaneAngleQuartic();
-    globalInPlaneAnglePentic   = force.getMMFFGlobalInPlaneAnglePentic();
-    globalInPlaneAngleSextic   = force.getMMFFGlobalInPlaneAngleSextic();
-    usePeriodic = force.usesPeriodicBoundaryConditions();
-}
-
-double ReferenceCalcMMFFInPlaneAngleForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-
-    vector<Vec3>& posData = extractPositions(context);
-    vector<Vec3>& forceData = extractForces(context);
-    MMFFReferenceInPlaneAngleForce mmffReferenceInPlaneAngleForce;
-    if (usePeriodic)
-        mmffReferenceInPlaneAngleForce.setPeriodic(extractBoxVectors(context));
-    double energy = mmffReferenceInPlaneAngleForce.calculateForceAndEnergy(numAngles, posData, particle1, particle2, particle3, particle4, 
-                                                                             angle, kQuadratic, globalInPlaneAngleCubic, globalInPlaneAngleQuartic,
-                                                                             globalInPlaneAnglePentic, globalInPlaneAngleSextic, forceData);
-    return static_cast<double>(energy);
-}
-
-void ReferenceCalcMMFFInPlaneAngleForceKernel::copyParametersToContext(ContextImpl& context, const MMFFInPlaneAngleForce& force) {
-    if (numAngles != force.getNumAngles())
-        throw OpenMMException("updateParametersInContext: The number of angles has changed");
-
-    // Record the values.
-
-    for (int i = 0; i < numAngles; ++i) {
-        int particle1Index, particle2Index, particle3Index, particle4Index;
-        double angleValue, k;
-        force.getAngleParameters(i, particle1Index, particle2Index, particle3Index, particle4Index, angleValue, k);
-        if (particle1Index != particle1[i] || particle2Index != particle2[i] || particle3Index != particle3[i] || particle4Index != particle4[i])
-            throw OpenMMException("updateParametersInContext: The set of particles in an angle has changed");
-        angle[i] = angleValue;
-        kQuadratic[i] = k;
-    }
-}
-
 ReferenceCalcMMFFPiTorsionForceKernel::ReferenceCalcMMFFPiTorsionForceKernel(std::string name, const Platform& platform, const System& system) :
          CalcMMFFPiTorsionForceKernel(name, platform), system(system) {
 }
@@ -389,10 +330,6 @@ void ReferenceCalcMMFFOutOfPlaneBendForceKernel::initialize(const System& system
         particle4.push_back(particle4Index); 
         kParameters.push_back(k);
     }
-    globalOutOfPlaneBendAngleCubic   = force.getMMFFGlobalOutOfPlaneBendCubic();
-    globalOutOfPlaneBendAngleQuartic = force.getMMFFGlobalOutOfPlaneBendQuartic();
-    globalOutOfPlaneBendAnglePentic  = force.getMMFFGlobalOutOfPlaneBendPentic();
-    globalOutOfPlaneBendAngleSextic  = force.getMMFFGlobalOutOfPlaneBendSextic();
     usePeriodic = force.usesPeriodicBoundaryConditions();
 }
 
@@ -404,11 +341,7 @@ double ReferenceCalcMMFFOutOfPlaneBendForceKernel::execute(ContextImpl& context,
         mmffReferenceOutOfPlaneBendForce.setPeriodic(extractBoxVectors(context));
     double energy = mmffReferenceOutOfPlaneBendForce.calculateForceAndEnergy(numOutOfPlaneBends, posData,
                                                                                particle1, particle2, particle3, particle4,
-                                                                               kParameters, 
-                                                                               globalOutOfPlaneBendAngleCubic,
-                                                                               globalOutOfPlaneBendAngleQuartic,
-                                                                               globalOutOfPlaneBendAnglePentic,
-                                                                               globalOutOfPlaneBendAngleSextic, forceData); 
+                                                                               kParameters, forceData); 
     return static_cast<double>(energy);
 }
 

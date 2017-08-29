@@ -35,6 +35,7 @@ static const double MMFF_BOND_CUBIC_K = -2.0 * AngstromsPerNm;
 static const double MMFF_BOND_QUARTIC_K = 7.0 / 12.0 * MMFF_BOND_CUBIC_K * MMFF_BOND_CUBIC_K;
 static const double MMFF_ANGLE_C1 = MDYNE_A_TO_KCAL_MOL * KJPerKcal;
 static const double MMFF_ANGLE_CUBIC_K = -0.006981317 * DegreesPerRadian;
+static const double MMFF_OOP_C1 = MMFF_ANGLE_C1 * DegreesPerRadian * DegreesPerRadian;
 
 } // namespace OpenMM
 
