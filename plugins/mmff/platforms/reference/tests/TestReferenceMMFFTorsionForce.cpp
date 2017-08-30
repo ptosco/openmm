@@ -84,7 +84,7 @@ static void getPrefactorsGivenAngleCosine(double cosine, double idealAngle, doub
 
     double angle;
     if (cosine >= 1.0) {
-        angle = 0.0;
+        angle = 0.0f;
     }
     else if (cosine <= -1.0) {
         angle = PI_M;

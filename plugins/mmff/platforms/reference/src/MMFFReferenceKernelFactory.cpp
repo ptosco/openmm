@@ -50,10 +50,9 @@ extern "C" OPENMM_EXPORT void registerKernelFactories() {
              MMFFReferenceKernelFactory* factory = new MMFFReferenceKernelFactory();
              platform.registerKernelFactory(CalcMMFFBondForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFAngleForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFPiTorsionForceKernel::Name(), factory);
+             platform.registerKernelFactory(CalcMMFFTorsionForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFStretchBendForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFOutOfPlaneBendForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFTorsionTorsionForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFVdwForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFMultipoleForceKernel::Name(), factory);
              platform.registerKernelFactory(CalcMMFFGeneralizedKirkwoodForceKernel::Name(), factory);
@@ -77,17 +76,14 @@ KernelImpl* MMFFReferenceKernelFactory::createKernelImpl(std::string name, const
     if (name == CalcMMFFAngleForceKernel::Name())
         return new ReferenceCalcMMFFAngleForceKernel(name, platform, context.getSystem());
 
-    if (name == CalcMMFFPiTorsionForceKernel::Name())
-        return new ReferenceCalcMMFFPiTorsionForceKernel(name, platform, context.getSystem());
+    if (name == CalcMMFFTorsionForceKernel::Name())
+        return new ReferenceCalcMMFFTorsionForceKernel(name, platform, context.getSystem());
 
     if (name == CalcMMFFStretchBendForceKernel::Name())
         return new ReferenceCalcMMFFStretchBendForceKernel(name, platform, context.getSystem());
 
     if (name == CalcMMFFOutOfPlaneBendForceKernel::Name())
         return new ReferenceCalcMMFFOutOfPlaneBendForceKernel(name, platform, context.getSystem());
-
-    if (name == CalcMMFFTorsionTorsionForceKernel::Name())
-        return new ReferenceCalcMMFFTorsionTorsionForceKernel(name, platform, context.getSystem());
 
     if (name == CalcMMFFVdwForceKernel::Name())
         return new ReferenceCalcMMFFVdwForceKernel(name, platform, context.getSystem());

@@ -1,15 +1,12 @@
-#ifndef OPENMM_MMFF_TORSION_TORSION_FORCE_PROXY_H_
-#define OPENMM_MMFF_TORSION_TORSION_FORCE_PROXY_H_
-
 /* -------------------------------------------------------------------------- *
- *                                OpenMMMMFF                                *
+ *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
  * This is part of the OpenMM molecular simulation toolkit originating from   *
  * Simbios, the NIH National Center for Physics-Based Simulation of           *
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2010 Stanford University and the Authors.           *
+ * Portions copyright (c) 2008-2016 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -32,22 +29,56 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/windowsExportMMFF.h"
-#include "openmm/serialization/SerializationProxy.h"
+#include "openmm/Force.h"
+#include "openmm/OpenMMException.h"
+#include "openmm/MMFFTorsionForce.h"
+#include "openmm/internal/AssertionUtilities.h"
+#include "openmm/internal/MMFFTorsionForceImpl.h"
 
-namespace OpenMM {
+using namespace OpenMM;
 
-/**
- * This is a proxy for serializing MMFFTorsionTorsionForce objects.
- */
+MMFFTorsionForce::MMFFTorsionForce() : usePeriodic(false) {
+}
 
-class OPENMM_EXPORT_MMFF MMFFTorsionTorsionForceProxy : public SerializationProxy {
-public:
-    MMFFTorsionTorsionForceProxy();
-    void serialize(const void* object, SerializationNode& node) const;
-    void* deserialize(const SerializationNode& node) const;
-};
+int MMFFTorsionForce::addTorsion(int particle1, int particle2, int particle3, int particle4, double c1, double c2, double c3) {
+    mmffTorsions.push_back(MMFFTorsionInfo(particle1, particle2, particle3, particle4, c1, c2, c3));
+    return mmffTorsions.size()-1;
+}
 
-} // namespace OpenMM
+void MMFFTorsionForce::getTorsionParameters(int index, int& particle1, int& particle2, int& particle3, int& particle4, double& c1, double& c2, double& c3) const {
+    ASSERT_VALID_INDEX(index, mmffTorsions);
+    particle1 = mmffTorsions[index].particle1;
+    particle2 = mmffTorsions[index].particle2;
+    particle3 = mmffTorsions[index].particle3;
+    particle4 = mmffTorsions[index].particle4;
+    c1 = mmffTorsions[index].c[0];
+    c2 = mmffTorsions[index].c[1];
+    c3 = mmffTorsions[index].c[2];
+}
 
-#endif /*OPENMM_MMFF_TORSION_TORSION_FORCE_PROXY_H_*/
+void MMFFTorsionForce::setTorsionParameters(int index, int particle1, int particle2, int particle3, int particle4, double c1, double c2, double c3) {
+    ASSERT_VALID_INDEX(index, mmffTorsions);
+    mmffTorsions[index].particle1 = particle1;
+    mmffTorsions[index].particle2 = particle2;
+    mmffTorsions[index].particle3 = particle3;
+    mmffTorsions[index].particle4 = particle4;
+    mmffTorsions[index].c[0] = c1;
+    mmffTorsions[index].c[1] = c2;
+    mmffTorsions[index].c[2] = c3;
+}
+
+ForceImpl* MMFFTorsionForce::createImpl() const {
+    return new MMFFTorsionForceImpl(*this);
+}
+
+void MMFFTorsionForce::updateParametersInContext(Context& context) {
+    dynamic_cast<MMFFTorsionForceImpl&>(getImplInContext(context)).updateParametersInContext(getContextImpl(context));
+}
+
+void MMFFTorsionForce::setUsesPeriodicBoundaryConditions(bool periodic) {
+    usePeriodic = periodic;
+}
+
+bool MMFFTorsionForce::usesPeriodicBoundaryConditions() const {
+    return usePeriodic;
+}

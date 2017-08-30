@@ -71,7 +71,7 @@ double MMFFReferenceBondForce::calculateBondIxn(const Vec3& positionAtomA, const
     double deltaIdeal2     = deltaIdeal*deltaIdeal;
 
     double dEdR            = (1.0 + 1.5*bondCubic*deltaIdeal + 2.0*bondQuartic*deltaIdeal2);
-    dEdR                  *= MMFF_BOND_C1*bondK*deltaIdeal;
+    dEdR                  *= bondK*deltaIdeal;
     dEdR                   = r > 0.0 ? (dEdR/r) : bondK*0.01;
 
     forces[0][0]           = dEdR*deltaR[0];
@@ -83,7 +83,7 @@ double MMFFReferenceBondForce::calculateBondIxn(const Vec3& positionAtomA, const
     forces[1][1]           = dEdR*deltaR[1];
     forces[1][2]           = dEdR*deltaR[2];
 
-    double energy          = 0.5*MMFF_BOND_C1*bondK*deltaIdeal2*(1.0 + bondCubic*deltaIdeal + bondQuartic*deltaIdeal2);
+    double energy          = 0.5*bondK*deltaIdeal2*(1.0 + bondCubic*deltaIdeal + bondQuartic*deltaIdeal2);
     return energy;
 }
 

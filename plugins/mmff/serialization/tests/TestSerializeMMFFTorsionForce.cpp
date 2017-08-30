@@ -1,15 +1,12 @@
-#ifndef OPENMM_MMFF_PI_TORSION_FORCE_PROXY_H_
-#define OPENMM_MMFF_PI_TORSION_FORCE_PROXY_H_
-
 /* -------------------------------------------------------------------------- *
- *                                OpenMMMMFF                                *
+ *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
  * This is part of the OpenMM molecular simulation toolkit originating from   *
  * Simbios, the NIH National Center for Physics-Based Simulation of           *
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2010 Stanford University and the Authors.           *
+ * Portions copyright (c) 2010-2016 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -32,22 +29,64 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/windowsExportMMFF.h"
-#include "openmm/serialization/SerializationProxy.h"
+#include "openmm/internal/AssertionUtilities.h"
+#include "openmm/MMFFTorsionForce.h"
+#include "openmm/serialization/XmlSerializer.h"
+#include <iostream>
+#include <sstream>
 
-namespace OpenMM {
+using namespace OpenMM;
+using namespace std;
 
-/**
- * This is a proxy for serializing MMFFPiTorsionForce objects.
- */
+void testSerialization() {
+    // Create a Force.
 
-class OPENMM_EXPORT_MMFF MMFFPiTorsionForceProxy : public SerializationProxy {
-public:
-    MMFFPiTorsionForceProxy();
-    void serialize(const void* object, SerializationNode& node) const;
-    void* deserialize(const SerializationNode& node) const;
-};
+    MMFFTorsionForce force;
+    force.setForceGroup(3);
+    force.addTorsion(0, 1, 2, 3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6);
+    force.addTorsion(0, 2, 3, 4, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7);
+    force.addTorsion(2, 3, 4, 7, -1, -2, -3, 1.1, 2.2, 3.3);
+    force.setUsesPeriodicBoundaryConditions(true);
 
-} // namespace OpenMM
+    // Serialize and then deserialize it.
 
-#endif /*OPENMM_MMFF_PI_TORSION_FORCE_PROXY_H_*/
+    stringstream buffer;
+    XmlSerializer::serialize<MMFFTorsionForce>(&force, "Force", buffer);
+    MMFFTorsionForce* copy = XmlSerializer::deserialize<MMFFTorsionForce>(buffer);
+
+    // Compare the two forces to see if they are identical.
+
+    MMFFTorsionForce& force2 = *copy;
+    ASSERT_EQUAL(force.getForceGroup(), force2.getForceGroup());
+    ASSERT_EQUAL(force.usesPeriodicBoundaryConditions(), force2.usesPeriodicBoundaryConditions());
+    ASSERT_EQUAL(force.getNumTorsions(), force2.getNumTorsions());
+    for (int i = 0; i < force.getNumTorsions(); i++) {
+        int a1, a2, a3, a4, b1, b2, b3, b4;
+        double c0a, c0b, c1a, c1b, c2a, c2b, c3a, c3b, c4a, c4b, c5a, c5b;
+        force.getTorsionParameters(i, a1, a2, a3, a4, c0a, c1a, c2a, c3a, c4a, c5a);
+        force2.getTorsionParameters(i, b1, b2, b3, b4, c0b, c1b, c2b, c3b, c4b, c5b);
+        ASSERT_EQUAL(a1, b1);
+        ASSERT_EQUAL(a2, b2);
+        ASSERT_EQUAL(a3, b3);
+        ASSERT_EQUAL(a4, b4);
+        ASSERT_EQUAL(c0a, c0b);
+        ASSERT_EQUAL(c1a, c1b);
+        ASSERT_EQUAL(c2a, c2b);
+        ASSERT_EQUAL(c3a, c3b);
+        ASSERT_EQUAL(c4a, c4b);
+        ASSERT_EQUAL(c5a, c5b);
+    }
+}
+
+int main() {
+    try {
+        testSerialization();
+    }
+    catch(const exception& e) {
+        cout << "exception: " << e.what() << endl;
+        return 1;
+    }
+    cout << "Done" << endl;
+    return 0;
+}
+

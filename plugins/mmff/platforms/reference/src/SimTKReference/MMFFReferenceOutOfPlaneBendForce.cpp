@@ -111,7 +111,7 @@ double MMFFReferenceOutOfPlaneBendForce::calculateOutOfPlaneBendIxn(const Vec3& 
     double dt    = angle;
     double dt2   = dt*dt;
  
-    double dEdDt = MMFF_OOP_C1*angleK*dt;
+    double dEdDt = angleK*dt;
     // calculate energy if 'energy' is set
     double energy = 0.5*dEdDt*dt;
     dEdDt *= RADIAN;

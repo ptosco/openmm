@@ -34,10 +34,9 @@
 
 #include "openmm/MMFFBondForce.h"
 #include "openmm/MMFFAngleForce.h"
-#include "openmm/MMFFPiTorsionForce.h"
+#include "openmm/MMFFTorsionForce.h"
 #include "openmm/MMFFStretchBendForce.h"
 #include "openmm/MMFFOutOfPlaneBendForce.h"
-#include "openmm/MMFFTorsionTorsionForce.h"
 #include "openmm/MMFFMultipoleForce.h"
 #include "openmm/MMFFGeneralizedKirkwoodForce.h"
 #include "openmm/MMFFVdwForce.h"

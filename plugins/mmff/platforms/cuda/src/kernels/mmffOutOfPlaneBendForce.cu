@@ -40,7 +40,7 @@ real angle = abs(ASIN(adXcd_dot_db));
 real dt = RAD_TO_DEG*angle;
 float k = (rdb2 != 0 && cc != 0) ? PARAMS[index] : 0.0f;
 
-real deddt = MMFF_OOP_C1*k*dt;
+real deddt = k*dt;
 energy += 0.5f*deddt*dt;
 deddt *= RAD_TO_DEG;
 

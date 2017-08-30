@@ -33,7 +33,6 @@
 #include "openmm/internal/MMFFGeneralizedKirkwoodForceImpl.h"
 #include "openmm/internal/MMFFMultipoleForceImpl.h"
 #include "openmm/internal/MMFFWcaDispersionForceImpl.h"
-#include "openmm/internal/MMFFTorsionTorsionForceImpl.h"
 #include "openmm/internal/MMFFVdwForceImpl.h"
 #include "openmm/internal/NonbondedForceImpl.h"
 #include "openmm/MMFFConstants.h"
@@ -123,7 +122,6 @@ void CudaCalcMMFFBondForceKernel::initialize(const System& system, const MMFFBon
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float2");
     replacements["CUBIC_K"] = cu.doubleToString(force.getMMFFGlobalBondCubic());
     replacements["QUARTIC_K"] = cu.doubleToString(force.getMMFFGlobalBondQuartic());
-    replacements["MMFF_BOND_C1"] = cu.doubleToString(MMFF_BOND_C1);
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaKernelSources::bondForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
 }
@@ -225,7 +223,6 @@ void CudaCalcMMFFAngleForceKernel::initialize(const System& system, const MMFFAn
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float2");
     replacements["CUBIC_K"] = cu.doubleToString(force.getMMFFGlobalAngleCubic());
     replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
-    replacements["MMFF_ANGLE_C1"] = cu.doubleToString(MMFF_ANGLE_C1);
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaKernelSources::angleForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
 }
@@ -262,95 +259,95 @@ void CudaCalcMMFFAngleForceKernel::copyParametersToContext(ContextImpl& context,
 }
 
 /* -------------------------------------------------------------------------- *
-  *                              MMFFPiTorsion                              *
+  *                              MMFFTorsion                              *
  * -------------------------------------------------------------------------- */
 
-class CudaCalcMMFFPiTorsionForceKernel::ForceInfo : public CudaForceInfo {
+class CudaCalcMMFFTorsionForceKernel::ForceInfo : public CudaForceInfo {
 public:
-    ForceInfo(const MMFFPiTorsionForce& force) : force(force) {
+    ForceInfo(const MMFFTorsionForce& force) : force(force) {
     }
     int getNumParticleGroups() {
-        return force.getNumPiTorsions();
+        return force.getNumTorsions();
     }
     void getParticlesInGroup(int index, std::vector<int>& particles) {
-        int particle1, particle2, particle3, particle4, particle5, particle6;
-        double k;
-        force.getPiTorsionParameters(index, particle1, particle2, particle3, particle4, particle5, particle6, k);
-        particles.resize(6);
+        int particle1, particle2, particle3, particle4;
+        double k1, k2 ,k3;
+        force.getTorsionParameters(index, particle1, particle2, particle3, particle4, k1, k2, k3);
+        particles.resize(4);
         particles[0] = particle1;
         particles[1] = particle2;
         particles[2] = particle3;
         particles[3] = particle4;
-        particles[4] = particle5;
-        particles[5] = particle6;
     }
     bool areGroupsIdentical(int group1, int group2) {
-        int particle1, particle2, particle3, particle4, particle5, particle6;
-        double k1, k2;
-        force.getPiTorsionParameters(group1, particle1, particle2, particle3, particle4, particle5, particle6, k1);
-        force.getPiTorsionParameters(group2, particle1, particle2, particle3, particle4, particle5, particle6, k2);
-        return (k1 == k2);
+        int particle1, particle2, particle3, particle4;
+        double k11, k21, k31;
+        double k12, k22, k32;
+        force.getTorsionParameters(group1, particle1, particle2, particle3, particle4, k11, k21, k31);
+        force.getTorsionParameters(group2, particle1, particle2, particle3, particle4, k12, k22, k32);
+        return (k11 == k12 && k21 == k22 && k31 == k32);
     }
 private:
-    const MMFFPiTorsionForce& force;
+    const MMFFTorsionForce& force;
 };
 
-CudaCalcMMFFPiTorsionForceKernel::CudaCalcMMFFPiTorsionForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) :
-         CalcMMFFPiTorsionForceKernel(name, platform), cu(cu), system(system), params(NULL) {
+CudaCalcMMFFTorsionForceKernel::CudaCalcMMFFTorsionForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) :
+         CalcMMFFTorsionForceKernel(name, platform), cu(cu), system(system), params(NULL) {
 }
 
-CudaCalcMMFFPiTorsionForceKernel::~CudaCalcMMFFPiTorsionForceKernel() {
+CudaCalcMMFFTorsionForceKernel::~CudaCalcMMFFTorsionForceKernel() {
     cu.setAsCurrent();
     if (params != NULL)
         delete params;
 }
 
-void CudaCalcMMFFPiTorsionForceKernel::initialize(const System& system, const MMFFPiTorsionForce& force) {
+void CudaCalcMMFFTorsionForceKernel::initialize(const System& system, const MMFFTorsionForce& force) {
     cu.setAsCurrent();
     int numContexts = cu.getPlatformData().contexts.size();
-    int startIndex = cu.getContextIndex()*force.getNumPiTorsions()/numContexts;
-    int endIndex = (cu.getContextIndex()+1)*force.getNumPiTorsions()/numContexts;
-    numPiTorsions = endIndex-startIndex;
-    if (numPiTorsions == 0)
+    int startIndex = cu.getContextIndex()*force.getNumTorsions()/numContexts;
+    int endIndex = (cu.getContextIndex()+1)*force.getNumTorsions()/numContexts;
+    numTorsions = endIndex-startIndex;
+    if (numTorsions == 0)
         return;
-    vector<vector<int> > atoms(numPiTorsions, vector<int>(6));
-    params = CudaArray::create<float>(cu, numPiTorsions, "piTorsionParams");
-    vector<float> paramVector(numPiTorsions);
-    for (int i = 0; i < numPiTorsions; i++) {
-        double k;
-        force.getPiTorsionParameters(startIndex+i, atoms[i][0], atoms[i][1], atoms[i][2], atoms[i][3], atoms[i][4], atoms[i][5], k);
-        paramVector[i] = (float) k;
+    vector<vector<int> > atoms(numTorsions, vector<int>(4));
+    params = CudaArray::create<float3>(cu, numTorsions, "torsionParams");
+    vector<float3> paramVector(numTorsions);
+    for (int i = 0; i < numTorsions; i++) {
+        double k1, k2, k3;
+        force.getTorsionParameters(startIndex+i, atoms[i][0], atoms[i][1], atoms[i][2], atoms[i][3], k1, k2, k3);
+        paramVector[i] = make_float3((float) k1, (float) k2, (float) k3);
     }
     params->upload(paramVector);
     map<string, string> replacements;
     replacements["APPLY_PERIODIC"] = (force.usesPeriodicBoundaryConditions() ? "1" : "0");
-    replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float");
-    cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaMMFFKernelSources::mmffPiTorsionForce, replacements), force.getForceGroup());
+    replacements["COMPUTE_FORCE"] = CudaMMFFKernelSources::mmffTorsionForce;
+    replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float3");
+    cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaKernelSources::torsionForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
 }
 
-double CudaCalcMMFFPiTorsionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+double CudaCalcMMFFTorsionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
     return 0.0;
 }
 
-void CudaCalcMMFFPiTorsionForceKernel::copyParametersToContext(ContextImpl& context, const MMFFPiTorsionForce& force) {
+void CudaCalcMMFFTorsionForceKernel::copyParametersToContext(ContextImpl& context, const MMFFTorsionForce& force) {
     cu.setAsCurrent();
     int numContexts = cu.getPlatformData().contexts.size();
-    int startIndex = cu.getContextIndex()*force.getNumPiTorsions()/numContexts;
-    int endIndex = (cu.getContextIndex()+1)*force.getNumPiTorsions()/numContexts;
-    if (numPiTorsions != endIndex-startIndex)
+    int startIndex = cu.getContextIndex()*force.getNumTorsions()/numContexts;
+    int endIndex = (cu.getContextIndex()+1)*force.getNumTorsions()/numContexts;
+    if (numTorsions != endIndex-startIndex)
         throw OpenMMException("updateParametersInContext: The number of torsions has changed");
-    if (numPiTorsions == 0)
+    if (numTorsions == 0)
         return;
     
     // Record the per-torsion parameters.
     
-    vector<float> paramVector(numPiTorsions);
-    for (int i = 0; i < numPiTorsions; i++) {
-        int atom1, atom2, atom3, atom4, atom5, atom6;
-        double k;
-        force.getPiTorsionParameters(startIndex+i, atom1, atom2, atom3, atom4, atom5, atom6, k);
-        paramVector[i] = (float) k;
+    vector<float3> paramVector(numTorsions);
+    for (int i = 0; i < numTorsions; i++) {
+        int atom1, atom2, atom3, atom4;
+        double k1, k2, k3;
+        force.getTorsionParameters(startIndex+i, atom1, atom2, atom3, atom4, k1, k2, k3);
+        paramVector[i] = make_float3((float) k1, (float) k2, (float) k3);
     }
     params->upload(paramVector);
     
@@ -528,7 +525,6 @@ void CudaCalcMMFFOutOfPlaneBendForceKernel::initialize(const System& system, con
     replacements["APPLY_PERIODIC"] = (force.usesPeriodicBoundaryConditions() ? "1" : "0");
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float");
     replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
-    replacements["MMFF_OOP_C1"] = cu.doubleToString(MMFF_OOP_C1);
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaMMFFKernelSources::mmffOutOfPlaneBendForce, replacements), force.getForceGroup());
     cu.addForce(new ForceInfo(force));
 }
@@ -561,111 +557,6 @@ void CudaCalcMMFFOutOfPlaneBendForceKernel::copyParametersToContext(ContextImpl&
     // Mark that the current reordering may be invalid.
     
     cu.invalidateMolecules();
-}
-
-/* -------------------------------------------------------------------------- *
- *                           MMFFTorsionTorsion                             *
- * -------------------------------------------------------------------------- */
-
-class CudaCalcMMFFTorsionTorsionForceKernel::ForceInfo : public CudaForceInfo {
-public:
-    ForceInfo(const MMFFTorsionTorsionForce& force) : force(force) {
-    }
-    int getNumParticleGroups() {
-        return force.getNumTorsionTorsions();
-    }
-    void getParticlesInGroup(int index, std::vector<int>& particles) {
-        int particle1, particle2, particle3, particle4, particle5, chiralCheckAtomIndex, gridIndex;
-        force.getTorsionTorsionParameters(index, particle1, particle2, particle3, particle4, particle5, chiralCheckAtomIndex, gridIndex);
-        particles.resize(5);
-        particles[0] = particle1;
-        particles[1] = particle2;
-        particles[2] = particle3;
-        particles[3] = particle4;
-        particles[4] = particle5;
-    }
-    bool areGroupsIdentical(int group1, int group2) {
-        int particle1, particle2, particle3, particle4, particle5;
-        int chiral1, chiral2, grid1, grid2;
-        force.getTorsionTorsionParameters(group1, particle1, particle2, particle3, particle4, particle5, chiral1, grid1);
-        force.getTorsionTorsionParameters(group2, particle1, particle2, particle3, particle4, particle5, chiral2, grid2);
-        return (grid1 == grid2);
-    }
-private:
-    const MMFFTorsionTorsionForce& force;
-};
-
-CudaCalcMMFFTorsionTorsionForceKernel::CudaCalcMMFFTorsionTorsionForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) :
-                CalcMMFFTorsionTorsionForceKernel(name, platform), cu(cu), system(system), gridValues(NULL), gridParams(NULL), torsionParams(NULL) {
-}
-
-CudaCalcMMFFTorsionTorsionForceKernel::~CudaCalcMMFFTorsionTorsionForceKernel() {
-    cu.setAsCurrent();
-    if (gridValues != NULL)
-        delete gridValues;
-    if (gridParams != NULL)
-        delete gridParams;
-    if (torsionParams != NULL)
-        delete torsionParams;
-}
-
-void CudaCalcMMFFTorsionTorsionForceKernel::initialize(const System& system, const MMFFTorsionTorsionForce& force) {
-    cu.setAsCurrent();
-    int numContexts = cu.getPlatformData().contexts.size();
-    int startIndex = cu.getContextIndex()*force.getNumTorsionTorsions()/numContexts;
-    int endIndex = (cu.getContextIndex()+1)*force.getNumTorsionTorsions()/numContexts;
-    numTorsionTorsions = endIndex-startIndex;
-    if (numTorsionTorsions == 0)
-        return;
-    
-    // Record torsion parameters.
-    
-    vector<vector<int> > atoms(numTorsionTorsions, vector<int>(5));
-    vector<int2> torsionParamsVec(numTorsionTorsions);
-    torsionParams = CudaArray::create<int2>(cu, numTorsionTorsions, "torsionTorsionParams");
-    for (int i = 0; i < numTorsionTorsions; i++)
-        force.getTorsionTorsionParameters(startIndex+i, atoms[i][0], atoms[i][1], atoms[i][2], atoms[i][3], atoms[i][4], torsionParamsVec[i].x, torsionParamsVec[i].y);
-    torsionParams->upload(torsionParamsVec);
-    
-    // Record the grids.
-    
-    vector<float4> gridValuesVec;
-    vector<float4> gridParamsVec;
-    for (int i = 0; i < force.getNumTorsionTorsionGrids(); i++) {
-        const TorsionTorsionGrid& initialGrid = force.getTorsionTorsionGrid(i);
-
-        // check if grid needs to be reordered: x-angle should be 'slow' index
-
-        bool reordered = false;
-        TorsionTorsionGrid reorderedGrid;
-        if (initialGrid[0][0][0] != initialGrid[0][1][0]) {
-            MMFFTorsionTorsionForceImpl::reorderGrid(initialGrid, reorderedGrid);
-            reordered = true;
-        }
-        const TorsionTorsionGrid& grid = (reordered ? reorderedGrid : initialGrid);
-        float range = grid[0][grid[0].size()-1][1] - grid[0][0][1];
-        gridParamsVec.push_back(make_float4(gridValuesVec.size(), grid[0][0][0], range/(grid.size()-1), grid.size()));
-        for (int j = 0; j < grid.size(); j++)
-            for (int k = 0; k < grid[j].size(); k++)
-                gridValuesVec.push_back(make_float4((float) grid[j][k][2], (float) grid[j][k][3], (float) grid[j][k][4], (float) grid[j][k][5]));
-    }
-    gridValues = CudaArray::create<float4>(cu, gridValuesVec.size(), "torsionTorsionGridValues");
-    gridParams = CudaArray::create<float4>(cu, gridParamsVec.size(), "torsionTorsionGridParams");
-    gridValues->upload(gridValuesVec);
-    gridParams->upload(gridParamsVec);
-    map<string, string> replacements;
-    replacements["APPLY_PERIODIC"] = (force.usesPeriodicBoundaryConditions() ? "1" : "0");
-    replacements["GRID_VALUES"] = cu.getBondedUtilities().addArgument(gridValues->getDevicePointer(), "float4");
-    replacements["GRID_PARAMS"] = cu.getBondedUtilities().addArgument(gridParams->getDevicePointer(), "float4");
-    replacements["TORSION_PARAMS"] = cu.getBondedUtilities().addArgument(torsionParams->getDevicePointer(), "int2");
-    replacements["RAD_TO_DEG"] = cu.doubleToString(180/M_PI);
-    cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaMMFFKernelSources::mmffTorsionTorsionForce, replacements), force.getForceGroup());
-    cu.getBondedUtilities().addPrefixCode(CudaMMFFKernelSources::bicubic);
-    cu.addForce(new ForceInfo(force));
-}
-
-double CudaCalcMMFFTorsionTorsionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-    return 0.0;
 }
 
 /* -------------------------------------------------------------------------- *

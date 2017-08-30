@@ -1,3 +1,6 @@
+#ifndef OPENMM_MMFF_TORSION_FORCE_IMPL_H_
+#define OPENMM_MMFF_TORSION_FORCE_IMPL_H_
+
 /* -------------------------------------------------------------------------- *
  *                                OpenMMMMFF                                *
  * -------------------------------------------------------------------------- *
@@ -6,7 +9,7 @@
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2008-2016 Stanford University and the Authors.      *
+ * Portions copyright (c) 2008 Stanford University and the Authors.           *
  * Authors:                                                                   *
  * Contributors:                                                              *
  *                                                                            *
@@ -29,53 +32,41 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/Force.h"
-#include "openmm/OpenMMException.h"
-#include "openmm/MMFFPiTorsionForce.h"
-#include "openmm/internal/MMFFPiTorsionForceImpl.h"
+#include "openmm/internal/ForceImpl.h"
+#include "openmm/MMFFTorsionForce.h"
+#include "openmm/Kernel.h"
+#include <utility>
+#include <set>
+#include <string>
 
-using namespace OpenMM;
+namespace OpenMM {
 
-MMFFPiTorsionForce::MMFFPiTorsionForce() : usePeriodic(false) {
-}
+/**
+ * This is the internal implementation of MMFFTorsionForce.
+ */
 
-int MMFFPiTorsionForce::addPiTorsion(int particle1, int particle2, int particle3, int particle4, int particle5, int particle6,  double k) {
-    piTorsions.push_back(PiTorsionInfo(particle1, particle2, particle3, particle4, particle5, particle6, k));
-    return piTorsions.size()-1;
-}
+class MMFFTorsionForceImpl : public ForceImpl {
+public:
+    MMFFTorsionForceImpl(const MMFFTorsionForce& owner);
+    ~MMFFTorsionForceImpl();
+    void initialize(ContextImpl& context);
+    const MMFFTorsionForce& getOwner() const {
+        return owner;
+    }
+    void updateContextState(ContextImpl& context, bool& forcesInvalid) {
+        // This force field doesn't update the state directly.
+    }
+    double calcForcesAndEnergy(ContextImpl& context, bool includeForces, bool includeEnergy, int groups);
+    std::map<std::string, double> getDefaultParameters() {
+        return std::map<std::string, double>(); // This force field doesn't define any parameters.
+    }
+    std::vector<std::string> getKernelNames();
+    void updateParametersInContext(ContextImpl& context);
+private:
+    const MMFFTorsionForce& owner;
+    Kernel kernel;
+};
 
-void MMFFPiTorsionForce::getPiTorsionParameters(int index, int& particle1, int& particle2, int& particle3, int& particle4, int& particle5, int& particle6, double& k) const {
-    particle1       = piTorsions[index].particle1;
-    particle2       = piTorsions[index].particle2;
-    particle3       = piTorsions[index].particle3;
-    particle4       = piTorsions[index].particle4;
-    particle5       = piTorsions[index].particle5;
-    particle6       = piTorsions[index].particle6;
-    k               = piTorsions[index].k;
-}
+} // namespace OpenMM
 
-void MMFFPiTorsionForce::setPiTorsionParameters(int index, int particle1, int particle2, int particle3, int particle4, int particle5, int particle6,  double k) {
-    piTorsions[index].particle1  = particle1;
-    piTorsions[index].particle2  = particle2;
-    piTorsions[index].particle3  = particle3;
-    piTorsions[index].particle4  = particle4;
-    piTorsions[index].particle5  = particle5;
-    piTorsions[index].particle6  = particle6;
-    piTorsions[index].k          = k;
-}
-
-ForceImpl* MMFFPiTorsionForce::createImpl() const {
-    return new MMFFPiTorsionForceImpl(*this);
-}
-
-void MMFFPiTorsionForce::updateParametersInContext(Context& context) {
-    dynamic_cast<MMFFPiTorsionForceImpl&>(getImplInContext(context)).updateParametersInContext(getContextImpl(context));
-}
-
-void MMFFPiTorsionForce::setUsesPeriodicBoundaryConditions(bool periodic) {
-    usePeriodic = periodic;
-}
-
-bool MMFFPiTorsionForce::usesPeriodicBoundaryConditions() const {
-    return usePeriodic;
-}
+#endif /*OPENMM_MMFF_TORSION_FORCE_IMPL_H_*/

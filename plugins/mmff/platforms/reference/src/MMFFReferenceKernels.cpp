@@ -27,14 +27,12 @@
 #include "MMFFReferenceKernels.h"
 #include "MMFFReferenceBondForce.h"
 #include "MMFFReferenceAngleForce.h"
-#include "MMFFReferencePiTorsionForce.h"
+#include "MMFFReferenceTorsionForce.h"
 #include "MMFFReferenceStretchBendForce.h"
 #include "MMFFReferenceOutOfPlaneBendForce.h"
-#include "MMFFReferenceTorsionTorsionForce.h"
 #include "MMFFReferenceVdwForce.h"
 #include "MMFFReferenceWcaDispersionForce.h"
 #include "MMFFReferenceGeneralizedKirkwoodForce.h"
-#include "openmm/internal/MMFFTorsionTorsionForceImpl.h"
 #include "openmm/internal/MMFFWcaDispersionForceImpl.h"
 #include "ReferencePlatform.h"
 #include "openmm/internal/ContextImpl.h"
@@ -195,58 +193,60 @@ void ReferenceCalcMMFFAngleForceKernel::copyParametersToContext(ContextImpl& con
     }
 }
 
-ReferenceCalcMMFFPiTorsionForceKernel::ReferenceCalcMMFFPiTorsionForceKernel(std::string name, const Platform& platform, const System& system) :
-         CalcMMFFPiTorsionForceKernel(name, platform), system(system) {
+ReferenceCalcMMFFTorsionForceKernel::ReferenceCalcMMFFTorsionForceKernel(std::string name, const Platform& platform, const System& system) :
+         CalcMMFFTorsionForceKernel(name, platform), system(system) {
 }
 
-ReferenceCalcMMFFPiTorsionForceKernel::~ReferenceCalcMMFFPiTorsionForceKernel() {
+ReferenceCalcMMFFTorsionForceKernel::~ReferenceCalcMMFFTorsionForceKernel() {
 }
 
-void ReferenceCalcMMFFPiTorsionForceKernel::initialize(const System& system, const MMFFPiTorsionForce& force) {
+void ReferenceCalcMMFFTorsionForceKernel::initialize(const System& system, const MMFFTorsionForce& force) {
 
-    numPiTorsions                     = force.getNumPiTorsions();
-    for (int ii = 0; ii < numPiTorsions; ii++) {
+    numTorsions                     = force.getNumTorsions();
+    for (int ii = 0; ii < numTorsions; ii++) {
 
-        int particle1Index, particle2Index, particle3Index, particle4Index, particle5Index, particle6Index;
-        double kTorsionParameter;
-        force.getPiTorsionParameters(ii, particle1Index, particle2Index, particle3Index, particle4Index, particle5Index, particle6Index, kTorsionParameter);
+        int particle1Index, particle2Index, particle3Index, particle4Index;
+        double k1TorsionParameter, k2TorsionParameter, k3TorsionParameter;
+        force.getTorsionParameters(ii, particle1Index, particle2Index, particle3Index, particle4Index, k1TorsionParameter, k2TorsionParameter, k3TorsionParameter);
         particle1.push_back(particle1Index); 
         particle2.push_back(particle2Index); 
         particle3.push_back(particle3Index); 
         particle4.push_back(particle4Index); 
-        particle5.push_back(particle5Index); 
-        particle6.push_back(particle6Index); 
-        kTorsion.push_back(kTorsionParameter);
+        k1Torsion.push_back(k1TorsionParameter);
+        k2Torsion.push_back(k2TorsionParameter);
+        k3Torsion.push_back(k3TorsionParameter);
     }
     usePeriodic = force.usesPeriodicBoundaryConditions();
 }
 
-double ReferenceCalcMMFFPiTorsionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+double ReferenceCalcMMFFTorsionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
     vector<Vec3>& posData = extractPositions(context);
     vector<Vec3>& forceData = extractForces(context);
-    MMFFReferencePiTorsionForce mmffReferencePiTorsionForce;
+    MMFFReferenceTorsionForce mmffReferenceTorsionForce;
     if (usePeriodic)
-        mmffReferencePiTorsionForce.setPeriodic(extractBoxVectors(context));
-    double energy = mmffReferencePiTorsionForce.calculateForceAndEnergy(numPiTorsions, posData, particle1, particle2,
-                                                                                    particle3, particle4, particle5, particle6,
-                                                                                    kTorsion, forceData);
+        mmffReferenceTorsionForce.setPeriodic(extractBoxVectors(context));
+    double energy = mmffReferenceTorsionForce.calculateForceAndEnergy(numTorsions, posData, particle1, particle2,
+                                                                      particle3, particle4, 
+                                                                      k1Torsion, k2Torsion, k3Torsion, forceData);
     return static_cast<double>(energy);
 }
 
-void ReferenceCalcMMFFPiTorsionForceKernel::copyParametersToContext(ContextImpl& context, const MMFFPiTorsionForce& force) {
-    if (numPiTorsions != force.getNumPiTorsions())
+void ReferenceCalcMMFFTorsionForceKernel::copyParametersToContext(ContextImpl& context, const MMFFTorsionForce& force) {
+    if (numTorsions != force.getNumTorsions())
         throw OpenMMException("updateParametersInContext: The number of torsions has changed");
 
     // Record the values.
 
-    for (int i = 0; i < numPiTorsions; ++i) {
-        int particle1Index, particle2Index, particle3Index, particle4Index, particle5Index, particle6Index;
-        double kTorsionParameter;
-        force.getPiTorsionParameters(i, particle1Index, particle2Index, particle3Index, particle4Index, particle5Index, particle6Index, kTorsionParameter);
+    for (int i = 0; i < numTorsions; ++i) {
+        int particle1Index, particle2Index, particle3Index, particle4Index;
+        double k1TorsionParameter, k2TorsionParameter, k3TorsionParameter;
+        force.getTorsionParameters(i, particle1Index, particle2Index, particle3Index, particle4Index, k1TorsionParameter, k2TorsionParameter, k3TorsionParameter);
         if (particle1Index != particle1[i] || particle2Index != particle2[i] || particle3Index != particle3[i] ||
-            particle4Index != particle4[i] || particle5Index != particle5[i] || particle6Index != particle6[i])
+            particle4Index != particle4[i])
             throw OpenMMException("updateParametersInContext: The set of particles in a torsion has changed");
-        kTorsion[i] = kTorsionParameter;
+        k1Torsion[i] = k1TorsionParameter;
+        k2Torsion[i] = k2TorsionParameter;
+        k3Torsion[i] = k3TorsionParameter;
     }
 }
 
@@ -359,84 +359,6 @@ void ReferenceCalcMMFFOutOfPlaneBendForceKernel::copyParametersToContext(Context
             throw OpenMMException("updateParametersInContext: The set of particles in an out-of-plane bend has changed");
         kParameters[i] = k;
     }
-}
-
-ReferenceCalcMMFFTorsionTorsionForceKernel::ReferenceCalcMMFFTorsionTorsionForceKernel(std::string name, const Platform& platform, const System& system) :
-                CalcMMFFTorsionTorsionForceKernel(name, platform), system(system) {
-}
-
-ReferenceCalcMMFFTorsionTorsionForceKernel::~ReferenceCalcMMFFTorsionTorsionForceKernel() {
-}
-
-void ReferenceCalcMMFFTorsionTorsionForceKernel::initialize(const System& system, const MMFFTorsionTorsionForce& force) {
-
-    numTorsionTorsions = force.getNumTorsionTorsions();
-
-    // torsion-torsion parameters
-
-    for (int ii = 0; ii < numTorsionTorsions; ii++) {
-        int particle1Index, particle2Index, particle3Index, particle4Index, particle5Index, chiralCheckAtomIndex, gridIndex;
-        force.getTorsionTorsionParameters(ii, particle1Index, particle2Index, particle3Index,
-                                          particle4Index, particle5Index, chiralCheckAtomIndex, gridIndex);
-        particle1.push_back(particle1Index); 
-        particle2.push_back(particle2Index); 
-        particle3.push_back(particle3Index); 
-        particle4.push_back(particle4Index); 
-        particle5.push_back(particle5Index); 
-        chiralCheckAtom.push_back(chiralCheckAtomIndex); 
-        gridIndices.push_back(gridIndex); 
-    }
-    usePeriodic = force.usesPeriodicBoundaryConditions();
-
-    // torsion-torsion grids
-
-    numTorsionTorsionGrids = force.getNumTorsionTorsionGrids();
-    torsionTorsionGrids.resize(numTorsionTorsionGrids);
-    for (int ii = 0; ii < numTorsionTorsionGrids; ii++) {
-
-        const TorsionTorsionGrid grid = force.getTorsionTorsionGrid(ii);
-        torsionTorsionGrids[ii].resize(grid.size());
-
-        // check if grid needs to be reordered: x-angle should be 'slow' index
-
-        TorsionTorsionGrid reorderedGrid;
-        int reorder = 0; 
-        if (grid[0][0][0] != grid[0][1][0]) {
-            MMFFTorsionTorsionForceImpl::reorderGrid(grid, reorderedGrid);
-            reorder = 1; 
-        }    
-
-        for (unsigned int kk = 0; kk < grid.size(); kk++) {
-
-            torsionTorsionGrids[ii][kk].resize(grid[kk].size());
-            for (unsigned int jj = 0; jj < grid[kk].size(); jj++) {
-
-                torsionTorsionGrids[ii][kk][jj].resize(grid[kk][jj].size());
-                if (reorder) {
-                    for (unsigned int ll = 0; ll < grid[ll][jj].size(); ll++) {
-                        torsionTorsionGrids[ii][kk][jj][ll] = reorderedGrid[kk][jj][ll];
-                    }
-                } else {
-                    for (unsigned int ll = 0; ll < grid[ll][jj].size(); ll++) {
-                        torsionTorsionGrids[ii][kk][jj][ll] = grid[kk][jj][ll];
-                    }
-                }
-            }
-        }
-    }
-}
-
-double ReferenceCalcMMFFTorsionTorsionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-
-    vector<Vec3>& posData   = extractPositions(context);
-    vector<Vec3>& forceData = extractForces(context);
-    MMFFReferenceTorsionTorsionForce mmffReferenceTorsionTorsionForce;
-    if (usePeriodic)
-        mmffReferenceTorsionTorsionForce.setPeriodic(extractBoxVectors(context));
-    double energy = mmffReferenceTorsionTorsionForce.calculateForceAndEnergy(numTorsionTorsions, posData,
-                                                                                         particle1, particle2, particle3, particle4, particle5,
-                                                                                         chiralCheckAtom, gridIndices, torsionTorsionGrids, forceData);
-    return static_cast<double>(energy);
 }
 
 /* -------------------------------------------------------------------------- *

@@ -1,13 +1,13 @@
 /* -------------------------------------------------------------------------- *
- *                               OpenMMMMFF                                 *
+ *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
  * This is part of the OpenMM molecular simulation toolkit originating from   *
  * Simbios, the NIH National Center for Physics-Based Simulation of           *
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2008 Stanford University and the Authors.           *
- * Authors:                                                                   *
+ * Portions copyright (c) 2008-2012 Stanford University and the Authors.      *
+ * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
  * Permission is hereby granted, free of charge, to any person obtaining a    *
@@ -30,39 +30,38 @@
  * -------------------------------------------------------------------------- */
 
 #include "openmm/internal/ContextImpl.h"
-#include "openmm/internal/MMFFPiTorsionForceImpl.h"
+#include "openmm/internal/MMFFTorsionForceImpl.h"
 #include "openmm/mmffKernels.h"
 
 using namespace OpenMM;
-
 using std::pair;
 using std::vector;
 using std::set;
 
-MMFFPiTorsionForceImpl::MMFFPiTorsionForceImpl(const MMFFPiTorsionForce& owner) : owner(owner) {
+MMFFTorsionForceImpl::MMFFTorsionForceImpl(const MMFFTorsionForce& owner) : owner(owner) {
 }
 
-MMFFPiTorsionForceImpl::~MMFFPiTorsionForceImpl() {
+MMFFTorsionForceImpl::~MMFFTorsionForceImpl() {
 }
 
-void MMFFPiTorsionForceImpl::initialize(ContextImpl& context) {
-    kernel = context.getPlatform().createKernel(CalcMMFFPiTorsionForceKernel::Name(), context);
-    kernel.getAs<CalcMMFFPiTorsionForceKernel>().initialize(context.getSystem(), owner);
+void MMFFTorsionForceImpl::initialize(ContextImpl& context) {
+    kernel = context.getPlatform().createKernel(CalcMMFFTorsionForceKernel::Name(), context);
+    kernel.getAs<CalcMMFFTorsionForceKernel>().initialize(context.getSystem(), owner);
 }
 
-double MMFFPiTorsionForceImpl::calcForcesAndEnergy(ContextImpl& context, bool includeForces, bool includeEnergy, int groups) {
+double MMFFTorsionForceImpl::calcForcesAndEnergy(ContextImpl& context, bool includeForces, bool includeEnergy, int groups) {
     if ((groups&(1<<owner.getForceGroup())) != 0)
-        return kernel.getAs<CalcMMFFPiTorsionForceKernel>().execute(context, includeForces, includeEnergy);
+        return kernel.getAs<CalcMMFFTorsionForceKernel>().execute(context, includeForces, includeEnergy);
     return 0.0;
 }
 
-std::vector<std::string> MMFFPiTorsionForceImpl::getKernelNames() {
+std::vector<std::string> MMFFTorsionForceImpl::getKernelNames() {
     std::vector<std::string> names;
-    names.push_back(CalcMMFFPiTorsionForceKernel::Name());
+    names.push_back(CalcMMFFTorsionForceKernel::Name());
     return names;
 }
 
-void MMFFPiTorsionForceImpl::updateParametersInContext(ContextImpl& context) {
-    kernel.getAs<CalcMMFFPiTorsionForceKernel>().copyParametersToContext(context, owner);
+void MMFFTorsionForceImpl::updateParametersInContext(ContextImpl& context) {
+    kernel.getAs<CalcMMFFTorsionForceKernel>().copyParametersToContext(context, owner);
     context.systemChanged();
 }

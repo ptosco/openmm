@@ -32,6 +32,7 @@
 #include "openmm/internal/ContextImpl.h"
 #include "openmm/internal/MMFFMultipoleForceImpl.h"
 #include "openmm/mmffKernels.h"
+#include <cmath>
 #include <stdio.h>
 
 using namespace OpenMM;

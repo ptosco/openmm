@@ -119,19 +119,19 @@ private:
 };
 
 /**
- * This kernel is invoked by MMFFPiTorsionForce to calculate the forces acting on the system and the energy of the system.
+ * This kernel is invoked by MMFFTorsionForce to calculate the forces acting on the system and the energy of the system.
  */
-class CudaCalcMMFFPiTorsionForceKernel : public CalcMMFFPiTorsionForceKernel {
+class CudaCalcMMFFTorsionForceKernel : public CalcMMFFTorsionForceKernel {
 public:
-    CudaCalcMMFFPiTorsionForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system);
-    ~CudaCalcMMFFPiTorsionForceKernel();
+    CudaCalcMMFFTorsionForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system);
+    ~CudaCalcMMFFTorsionForceKernel();
     /**
      * Initialize the kernel.
      * 
      * @param system     the System this kernel will be applied to
-     * @param force      the MMFFPiTorsionForce this kernel will be used for
+     * @param force      the MMFFTorsionForce this kernel will be used for
      */
-    void initialize(const System& system, const MMFFPiTorsionForce& force);
+    void initialize(const System& system, const MMFFTorsionForce& force);
     /**
      * Execute the kernel to calculate the forces and/or energy.
      *
@@ -145,12 +145,12 @@ public:
      * Copy changed parameters over to a context.
      *
      * @param context    the context to copy parameters to
-     * @param force      the MMFFPiTorsionForce to copy the parameters from
+     * @param force      the MMFFTorsionForce to copy the parameters from
      */
-    void copyParametersToContext(ContextImpl& context, const MMFFPiTorsionForce& force);
+    void copyParametersToContext(ContextImpl& context, const MMFFTorsionForce& force);
 private:
     class ForceInfo;
-    int numPiTorsions;
+    int numTorsions;
     CudaContext& cu;
     const System& system;
     CudaArray* params;
@@ -231,40 +231,6 @@ private:
     CudaContext& cu;
     const System& system;
     CudaArray* params;
-};
-
-/**
- * This kernel is invoked by MMFFTorsionTorsionForce to calculate the forces acting on the system and the energy of the system.
- */
-class CudaCalcMMFFTorsionTorsionForceKernel : public CalcMMFFTorsionTorsionForceKernel {
-public:
-    CudaCalcMMFFTorsionTorsionForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system);
-    ~CudaCalcMMFFTorsionTorsionForceKernel();
-    /**
-     * Initialize the kernel.
-     * 
-     * @param system     the System this kernel will be applied to
-     * @param force      the MMFFTorsionTorsionForce this kernel will be used for
-     */
-    void initialize(const System& system, const MMFFTorsionTorsionForce& force);
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
-private:
-    class ForceInfo;
-    int numTorsionTorsions;
-    int numTorsionTorsionGrids;
-    CudaContext& cu;
-    const System& system;
-    CudaArray* gridValues;
-    CudaArray* gridParams;
-    CudaArray* torsionParams;
 };
 
 /**

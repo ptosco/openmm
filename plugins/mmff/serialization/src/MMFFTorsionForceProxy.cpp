@@ -1,5 +1,5 @@
 /* -------------------------------------------------------------------------- *
- *                                OpenMMMMFF                                *
+ *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
  * This is part of the OpenMM molecular simulation toolkit originating from   *
  * Simbios, the NIH National Center for Physics-Based Simulation of           *
@@ -29,47 +29,45 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/serialization/MMFFPiTorsionForceProxy.h"
+#include "openmm/serialization/MMFFTorsionForceProxy.h"
 #include "openmm/serialization/SerializationNode.h"
 #include "openmm/Force.h"
-#include "openmm/MMFFPiTorsionForce.h"
+#include "openmm/MMFFTorsionForce.h"
 #include <sstream>
 
 using namespace OpenMM;
 using namespace std;
 
-MMFFPiTorsionForceProxy::MMFFPiTorsionForceProxy() : SerializationProxy("MMFFPiTorsionForce") {
+MMFFTorsionForceProxy::MMFFTorsionForceProxy() : SerializationProxy("MMFFTorsionForce") {
 }
 
-void MMFFPiTorsionForceProxy::serialize(const void* object, SerializationNode& node) const {
-    node.setIntProperty("version", 3);
-    const MMFFPiTorsionForce& force = *reinterpret_cast<const MMFFPiTorsionForce*>(object);
+void MMFFTorsionForceProxy::serialize(const void* object, SerializationNode& node) const {
+    node.setIntProperty("version", 2);
+    const MMFFTorsionForce& force = *reinterpret_cast<const MMFFTorsionForce*>(object);
     node.setIntProperty("forceGroup", force.getForceGroup());
     node.setBoolProperty("usesPeriodic", force.usesPeriodicBoundaryConditions());
-    SerializationNode& bonds = node.createChildNode("PiTorsion");
-    for (unsigned int ii = 0; ii < static_cast<unsigned int>(force.getNumPiTorsions()); ii++) {
-        int particle1, particle2, particle3, particle4, particle5, particle6;
-        double k;
-        force.getPiTorsionParameters(ii, particle1, particle2, particle3, particle4, particle5, particle6, k);
-        bonds.createChildNode("PiTorsion").setIntProperty("p1", particle1).setIntProperty("p2", particle2).setIntProperty("p3", particle3).setIntProperty("p4", particle4).setIntProperty("p5", particle5).setIntProperty("p6", particle6).setDoubleProperty("k", k);
+    SerializationNode& torsions = node.createChildNode("Torsions");
+    for (int i = 0; i < force.getNumTorsions(); i++) {
+        int particle1, particle2, particle3, particle4;
+        double c1, c2, c3;
+        force.getTorsionParameters(i, particle1, particle2, particle3, particle4, c1, c2, c3);
+        torsions.createChildNode("Torsion").setIntProperty("p1", particle1).setIntProperty("p2", particle2).setIntProperty("p3", particle3).setIntProperty("p4", particle4).setDoubleProperty("c1", c1).setDoubleProperty("c2", c2).setDoubleProperty("c3", c3);
     }
 }
 
-void* MMFFPiTorsionForceProxy::deserialize(const SerializationNode& node) const {
+void* MMFFTorsionForceProxy::deserialize(const SerializationNode& node) const {
     int version = node.getIntProperty("version");
-    if (version < 1 || version > 3)
+    if (version < 1 || version > 2)
         throw OpenMMException("Unsupported version number");
-    MMFFPiTorsionForce* force = new MMFFPiTorsionForce();
+    MMFFTorsionForce* force = new MMFFTorsionForce();
     try {
+        force->setForceGroup(node.getIntProperty("forceGroup", 0));
         if (version > 1)
-            force->setForceGroup(node.getIntProperty("forceGroup", 0));
-        if (version > 2)
             force->setUsesPeriodicBoundaryConditions(node.getBoolProperty("usesPeriodic"));
-        const SerializationNode& bonds = node.getChildNode("PiTorsion");
-        for (unsigned int ii = 0; ii < bonds.getChildren().size(); ii++) {
-            const SerializationNode& bond = bonds.getChildren()[ii];
-            force->addPiTorsion(bond.getIntProperty("p1"), bond.getIntProperty("p2"), bond.getIntProperty("p3"),  bond.getIntProperty("p4"), bond.getIntProperty("p5"), bond.getIntProperty("p6"), bond.getDoubleProperty("k"));
-        }
+        const SerializationNode& torsions = node.getChildNode("Torsions");
+        for (auto& torsion : torsions.getChildren())
+            force->addTorsion(torsion.getIntProperty("p1"), torsion.getIntProperty("p2"), torsion.getIntProperty("p3"), torsion.getIntProperty("p4"),
+                    torsion.getDoubleProperty("c1"), torsion.getDoubleProperty("c2"), torsion.getDoubleProperty("c3"));
     }
     catch (...) {
         delete force;

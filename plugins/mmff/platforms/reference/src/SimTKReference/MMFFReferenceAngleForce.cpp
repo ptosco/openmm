@@ -54,18 +54,18 @@ void MMFFReferenceAngleForce::setPeriodic(OpenMM::Vec3* vectors) {
    --------------------------------------------------------------------------------------- */
 
 double MMFFReferenceAngleForce::getPrefactorsGivenAngleCosine(double cosine,
-                                                                double idealAngle,     double angleK,
-                                                                double angleCubic,     bool isLinear,
-                                                                double* dEdR) const {
+                                                              double idealAngle,     double angleK,
+                                                              double angleCubic,     bool isLinear,
+                                                              double* dEdR) const {
 
     double angle = -1.0;
     static const double MIN_SINE = 1.0e-8;
-    double energy = MMFF_ANGLE_C1*angleK;
+    double energy = angleK;
     if (!(cosine < 1.0)) {
         angle = 0.0;
         cosine = 1.0;
     } else if (!(cosine > -1.0)) {
-        angle = RADIAN*PI_M;
+        angle = PI_M;
         cosine = -1.0;
     }
     if (isLinear) {
@@ -74,10 +74,10 @@ double MMFFReferenceAngleForce::getPrefactorsGivenAngleCosine(double cosine,
         energy                   *= 1.0 + cosine;
     } else {
         if (angle < 0.0)
-            angle = RADIAN*ACOS(cosine);
+            angle = ACOS(cosine);
         double deltaIdeal         = angle - idealAngle;
         double p = MMFF_ANGLE_CUBIC_K*deltaIdeal;
-        *dEdR                     = RADIAN*energy*deltaIdeal*(1.0 + 1.5*p);
+        *dEdR                     = energy*deltaIdeal*(1.0 + 1.5*p);
         energy                   *= 0.5*deltaIdeal*deltaIdeal*(1.0 + p);
     }
 
@@ -122,7 +122,7 @@ double MMFFReferenceAngleForce::calculateAngleIxn(const Vec3& positionAtomA, con
     double rCB2      = MMFFReferenceForce::getNormSquared3(deltaR[1]);
     double rCB       = SQRT(rCB2);
  
-    if (rAB <= 0.0 || rCB <= 0.0) {
+    if (!(rAB > 0.0 && rCB > 0.0)) {
        return 0.0;
     }
  

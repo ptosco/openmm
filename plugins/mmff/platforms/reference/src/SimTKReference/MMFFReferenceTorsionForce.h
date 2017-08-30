@@ -22,15 +22,15 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __MMFFReferencePiTorsionForce_H__
-#define __MMFFReferencePiTorsionForce_H__
+#ifndef __MMFFReferenceTorsionForce_H__
+#define __MMFFReferenceTorsionForce_H__
 
 #include "openmm/Vec3.h"
 #include <vector>
 
 namespace OpenMM {
 
-class MMFFReferencePiTorsionForce {
+class MMFFReferenceTorsionForce {
 
 public:
  
@@ -40,7 +40,7 @@ public:
        
        --------------------------------------------------------------------------------------- */
  
-    MMFFReferencePiTorsionForce() : usePeriodic(false) {};
+    MMFFReferenceTorsionForce() : usePeriodic(false) {};
  
     /**---------------------------------------------------------------------------------------
        
@@ -48,7 +48,7 @@ public:
        
           --------------------------------------------------------------------------------------- */
  
-    ~MMFFReferencePiTorsionForce() {};
+    ~MMFFReferenceTorsionForce() {};
  
     /**---------------------------------------------------------------------------------------
 
@@ -70,11 +70,9 @@ public:
         @param particle2               particle 2 indices
         @param particle3               particle 3 indices
         @param particle4               particle 4 indices
-        @param particle5               particle 5 indices
-        @param particle6               particle 6 indices
-        @param torsionParameters1      first  index torsion parameters (amplitude, phase, fold)
-        @param torsionParameters2      second index torsion parameters (amplitude, phase, fold)
-        @param torsionParameters3      third  index torsion parameters (amplitude, phase, fold)
+        @param torsionK1               dihedral torsion constant 1
+        @param torsionK2               dihedral torsion constant 2
+        @param torsionK3               dihedral torsion constant 3
         @param forces                  output force vector
      
         @return total energy
@@ -82,16 +80,15 @@ public:
      
         --------------------------------------------------------------------------------------- */
 
-    double calculateForceAndEnergy(int numPiTorsions, std::vector<OpenMM::Vec3>& posData,
-                                   const std::vector<int>&  particle1,
+    double calculateForceAndEnergy(int numTorsions, std::vector<OpenMM::Vec3>& posData,
+                                   const std::vector<int>& particle1,
                                    const std::vector<int>&  particle2,
                                    const std::vector<int>&  particle3,
                                    const std::vector<int>&  particle4,
-                                   const std::vector<int>&  particle5,
-                                   const std::vector<int>&  particle6,
-                                   const std::vector<double>& kTorsion,
+                                   const std::vector<double>& k1,
+                                   const std::vector<double>& k2,
+                                   const std::vector<double>& k3,
                                    std::vector<OpenMM::Vec3>& forceData) const;
-
 
 private:
 
@@ -100,28 +97,28 @@ private:
 
     /**---------------------------------------------------------------------------------------
     
-       Calculate MMFF pi-torsion ixn (force and energy)
+       Calculate MMFF torsion ixn (force and energy)
     
        @param positionAtomA           Cartesian coordinates of atom A
        @param positionAtomB           Cartesian coordinates of atom B
        @param positionAtomC           Cartesian coordinates of atom C
        @param positionAtomD           Cartesian coordinates of atom D
-       @param positionAtomE           Cartesian coordinates of atom E
-       @param positionAtomF           Cartesian coordinates of atom F
-       @param kTorsion                k-torsion parameter
+       @param torsionK1               dihedral torsion constant 1
+       @param torsionK2               dihedral torsion constant 2
+       @param torsionK3               dihedral torsion constant 3
        @param forces                  force vector
     
        @return energy
     
        --------------------------------------------------------------------------------------- */
     
-    double calculatePiTorsionIxn(const OpenMM::Vec3& positionAtomA, const OpenMM::Vec3& positionAtomB,
-                                 const OpenMM::Vec3& positionAtomC, const OpenMM::Vec3& positionAtomD,
-                                 const OpenMM::Vec3& positionAtomE, const OpenMM::Vec3& positionAtomF,
-                                 double kTorsion, OpenMM::Vec3* forces) const;
+    double calculateTorsionIxn(const OpenMM::Vec3& positionAtomA, const OpenMM::Vec3& positionAtomB,
+                               const OpenMM::Vec3& positionAtomC, const OpenMM::Vec3& positionAtomD,
+                               double torsionK1, double torsionK2, double torsionK3,
+                               OpenMM::Vec3* forces) const;
          
 };
 
 } // namespace OpenMM
 
-#endif // _MMFFReferencePiTorsionForce___
+#endif // _MMFFReferenceTorsionForce___
