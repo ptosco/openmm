@@ -175,6 +175,28 @@ public:
      */
     SerializationNode& setBoolProperty(const std::string& name, bool value);
     /**
+     * Get the property with a particular name, specified as an char.  If there is no property with
+     * the specified name, an exception is thrown.
+     *
+     * @param name   the name of the property to get
+     */
+    char getCharProperty(const std::string& name) const;
+    /**
+     * Get the property with a particular name, specified as a char.  If there is no property with
+     * the specified name, a default value is returned instead.
+     *
+     * @param name          the name of the property to get
+     * @param defaultValue  the value to return if the specified property does not exist
+     */
+    char getCharProperty(const std::string& name, char defaultValue) const;
+    /**
+     * Set the value of a property, specified as a char.
+     *
+     * @param name   the name of the property to set
+     * @param value  the value to set for the property
+     */
+    SerializationNode& setCharProperty(const std::string& name, char value);
+    /**
      * Get the property with a particular name, specified as a double.  If there is no property with
      * the specified name, an exception is thrown.
      *

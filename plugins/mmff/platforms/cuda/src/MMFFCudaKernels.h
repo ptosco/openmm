@@ -520,13 +520,8 @@ private:
     const System& system;
     bool hasInitializedNonbonded;
     double dispersionCoefficient;
-    CudaArray* sigmaEpsilon;
-    CudaArray* bondReductionAtoms;
-    CudaArray* bondReductionFactors;
-    CudaArray* tempPosq;
-    CudaArray* tempForces;
+    CudaArray* params;
     CudaNonbondedUtilities* nonbonded;
-    CUfunction prepareKernel, spreadKernel;
 };
 
 /**

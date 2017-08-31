@@ -36,16 +36,6 @@ using namespace OpenMM;
 MMFFReferenceVdwForce::MMFFReferenceVdwForce() : _nonbondedMethod(NoCutoff), _cutoff(1.0e+10), _taperCutoffFactor(0.9) {
 
     setTaperCoefficients(_cutoff);
-    setSigmaCombiningRule("ARITHMETIC");
-    setEpsilonCombiningRule("GEOMETRIC");
-}
-
-
-MMFFReferenceVdwForce::MMFFReferenceVdwForce(const std::string& sigmaCombiningRule, const std::string& epsilonCombiningRule) : _nonbondedMethod(NoCutoff), _cutoff(1.0e+10), _taperCutoffFactor(0.9) {
-
-    setTaperCoefficients(_cutoff);
-    setSigmaCombiningRule(sigmaCombiningRule);
-    setEpsilonCombiningRule(epsilonCombiningRule);
 }
 
 MMFFReferenceVdwForce::NonbondedMethod MMFFReferenceVdwForce::getNonbondedMethod() const {
@@ -84,131 +74,24 @@ void MMFFReferenceVdwForce::setPeriodicBox(OpenMM::Vec3* vectors) {
     _periodicBoxVectors[2] = vectors[2];
 }
 
-void MMFFReferenceVdwForce::setSigmaCombiningRule(const std::string& sigmaCombiningRule) {
-
-    _sigmaCombiningRule = sigmaCombiningRule;
-
-    // convert to upper case and set combining function
-
-    std::transform(_sigmaCombiningRule.begin(), _sigmaCombiningRule.end(), _sigmaCombiningRule.begin(),  (int(*)(int)) std::toupper);
-    if (_sigmaCombiningRule == "GEOMETRIC") {
-        _combineSigmas = &MMFFReferenceVdwForce::geometricSigmaCombiningRule;
-    } else if (_sigmaCombiningRule == "CUBIC-MEAN") {
-        _combineSigmas = &MMFFReferenceVdwForce::cubicMeanSigmaCombiningRule;
-    } else if (_sigmaCombiningRule == "MMFF") {
-        _combineSigmas = &MMFFReferenceVdwForce::mmffSigmaCombiningRule;
-    } else {
-        _combineSigmas = &MMFFReferenceVdwForce::arithmeticSigmaCombiningRule;
-    }
-}
-
-std::string MMFFReferenceVdwForce::getSigmaCombiningRule() const {
-    return _sigmaCombiningRule;
-}
-
-double MMFFReferenceVdwForce::arithmeticSigmaCombiningRule(double sigmaI, double sigmaJ) const {
-    return (sigmaI + sigmaJ);
-}
-
-double MMFFReferenceVdwForce::geometricSigmaCombiningRule(double sigmaI, double sigmaJ) const {
-    return 2.0*sqrt(sigmaI*sigmaJ);
-}
-
-double MMFFReferenceVdwForce::cubicMeanSigmaCombiningRule(double sigmaI, double sigmaJ) const {
-    double sigmaI2 = sigmaI*sigmaI;
-    double sigmaJ2 = sigmaJ*sigmaJ;
-
-    return sigmaI != 0.0 && sigmaJ != 0.0 ? 2.0*(sigmaI2*sigmaI + sigmaJ2*sigmaJ)/(sigmaI2 + sigmaJ2) : 0.0;
-}
-
-double MMFFReferenceVdwForce::mmffSigmaCombiningRule(double sigmaI, double sigmaJ) const {
-
+double MMFFReferenceVdwForce::_mmffSigmaCombiningRule(double sigmaI, double sigmaJ, char vdwDAI, char vdwDAJ) {
     static const double B = 0.2;
     static const double Beta = 12.0;
-    bool haveDonor = false;
-    if (sigmaI < 0.0) {
-        sigmaI = -sigmaI;
-        haveDonor = true;
-    }
-    if (sigmaJ < 0.0) {
-        sigmaJ = -sigmaJ;
-        haveDonor = true;
-    }
+    bool haveDonor = (vdwDAI == 'D' || vdwDAJ == 'D');
     double gammaIJ = (sigmaI - sigmaJ) / (sigmaI + sigmaJ);
     double sigma = 0.5 * (sigmaI + sigmaJ) * (1.0 + (haveDonor
         ? 0.0 : B * (1.0 - exp(-Beta * gammaIJ * gammaIJ))));
     return sigma;
 }
 
-void MMFFReferenceVdwForce::setEpsilonCombiningRule(const std::string& epsilonCombiningRule) {
-
-    _epsilonCombiningRule = epsilonCombiningRule;
-    std::transform(_epsilonCombiningRule.begin(), _epsilonCombiningRule.end(), _epsilonCombiningRule.begin(),  (int(*)(int)) std::toupper);
-
-    // convert to upper case and set combining function
-
-    if (_epsilonCombiningRule == "ARITHMETIC") {
-         _combineEpsilons = &MMFFReferenceVdwForce::arithmeticEpsilonCombiningRule;
-    } else if (_epsilonCombiningRule == "HARMONIC") {
-         _combineEpsilons = &MMFFReferenceVdwForce::harmonicEpsilonCombiningRule;
-    } else if (_epsilonCombiningRule == "HHG") {
-         _combineEpsilons = &MMFFReferenceVdwForce::hhgEpsilonCombiningRule;
-    } else if (_epsilonCombiningRule == "MMFF") {
-         _combineEpsilons = &MMFFReferenceVdwForce::mmffEpsilonCombiningRule;
-    } else {
-         _combineEpsilons = &MMFFReferenceVdwForce::geometricEpsilonCombiningRule;
-    }
-}
-
-std::string MMFFReferenceVdwForce::getEpsilonCombiningRule() const {
-    return _epsilonCombiningRule;
-}
-
-double MMFFReferenceVdwForce::arithmeticEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
-    return 0.5*(epsilonI + epsilonJ);
-}
-
-double MMFFReferenceVdwForce::geometricEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
-    return sqrt(epsilonI*epsilonJ);
-}
-
-double MMFFReferenceVdwForce::harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
-    return (epsilonI != 0.0 && epsilonJ != 0.0) ? 2.0*(epsilonI*epsilonJ)/(epsilonI + epsilonJ) : 0.0;
-}
-
-double MMFFReferenceVdwForce::hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
-    double denominator = sqrt(epsilonI) + sqrt(epsilonJ);
-    return (epsilonI != 0.0 && epsilonJ != 0.0) ? 4.0*(epsilonI*epsilonJ)/(denominator*denominator) : 0.0;
-}
-
-double MMFFReferenceVdwForce::mmffEpsilonCombiningRule(double epsilonI, double epsilonJ) const {
-}
-
-double MMFFReferenceVdwForce::mmffEpsilonCombiningRuleHelper(double combinedSigma,
-    double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ) {
+double MMFFReferenceVdwForce::_mmffEpsilonCombiningRule(double combinedSigma,
+    double alpha_d_NI, double alpha_d_NJ, double G_t_alphaI, double G_t_alphaJ) {
     double combinedSigma2 = combinedSigma * combinedSigma;
     static const double NmPerAngstrom2 = NmPerAngstrom * NmPerAngstrom;
-    if (alphaI_d_NI < 0.0)
-        alphaI_d_NI = -alphaI_d_NI;
-    if (alphaJ_d_NJ < 0.0)
-        alphaJ_d_NJ = -alphaJ_d_NJ;
-    static const double c4 = 181.16 * KJPerKcal * NmPerAngstrom2 * NmPerAngstrom2 * NmPerAngstrom2;
-    double epsilon = GI_t_alphaI * GJ_t_alphaJ / ((sqrt(alphaI_d_NI) + sqrt(alphaJ_d_NJ)) *
+    static const double C4 = 7.5797344e-4;
+    double epsilon = G_t_alphaI * G_t_alphaJ / ((sqrt(alpha_d_NI) + sqrt(alpha_d_NJ)) *
         combinedSigma2 * combinedSigma2 * combinedSigma2);
-    return c4 * epsilon;
-}
-
-void MMFFReferenceVdwForce::addReducedForce(unsigned int particleI, unsigned int particleIV,
-                                              double reduction, double sign,
-                                              Vec3& force, vector<Vec3>& forces) const {
-
-    forces[particleI][0]  += sign*force[0]*reduction;
-    forces[particleI][1]  += sign*force[1]*reduction;
-    forces[particleI][2]  += sign*force[2]*reduction;
-
-    forces[particleIV][0] += sign*force[0]*(1.0 - reduction);
-    forces[particleIV][1] += sign*force[1]*(1.0 - reduction);
-    forces[particleIV][2] += sign*force[2]*(1.0 - reduction);
+    return C4 * epsilon;
 }
 
 double MMFFReferenceVdwForce::calculatePairIxn(double combinedSigma, double combinedEpsilon,
@@ -270,107 +153,68 @@ double MMFFReferenceVdwForce::calculatePairIxn(double combinedSigma, double comb
 
 }
 
-void MMFFReferenceVdwForce::setReducedPositions(int numParticles,
-                                                  const vector<Vec3>& particlePositions,
-                                                  const std::vector<int>& indexIVs, 
-                                                  const std::vector<double>& reductions,
-                                                  std::vector<Vec3>& reducedPositions) const {
-
-    reducedPositions.resize(numParticles);
-    for (unsigned int ii = 0; ii <  static_cast<unsigned int>(numParticles); ii++) {
-        if (reductions[ii] != 0.0) {
-            int reductionIndex     = indexIVs[ii];
-            reducedPositions[ii]   = Vec3(reductions[ii]*(particlePositions[ii][0] - particlePositions[reductionIndex][0]) + particlePositions[reductionIndex][0], 
-                                          reductions[ii]*(particlePositions[ii][1] - particlePositions[reductionIndex][1]) + particlePositions[reductionIndex][1], 
-                                          reductions[ii]*(particlePositions[ii][2] - particlePositions[reductionIndex][2]) + particlePositions[reductionIndex][2]); 
-        } else {
-            reducedPositions[ii]   = Vec3(particlePositions[ii][0], particlePositions[ii][1], particlePositions[ii][2]); 
-        }
-    }
-}
-
 double MMFFReferenceVdwForce::calculateForceAndEnergy(int numParticles,
                                                         const vector<OpenMM::Vec3>& particlePositions,
-                                                        const std::vector<int>& indexIVs, 
                                                         const std::vector<double>& sigmas,
-                                                        const std::vector<double>& epsilons,
-                                                        const std::vector<double>& reductions,
+                                                        const std::vector<double>& G_t_alphas,
+                                                        const std::vector<double>& alpha_d_Ns,
+                                                        const std::vector<char>& vdwDAs,
                                                         const std::vector< std::set<int> >& allExclusions,
                                                         vector<OpenMM::Vec3>& forces) const {
 
     // MMFF rules:
     // combinedSigma is equivalent to R_star_ij
     // the sigmas array should be initialized with R_star for each particle
-    // the epsilons array should be initialized with alpha_i/N_i for each particle
-    // the reductions array should be initialized with gamma_i*alpha_i for each particle
-    // the signs matter:
-    // - if sigma > 0.0 and epsilon > 0.0, then the particle is neither a donor nor an acceptor
-    // - if sigma > 0.0 and epsilon < 0.0, then the particle is an acceptor
-    // - if sigma < 0.0, then the particle is a donor
+    // the G_t_alphas array should be initialized with gamma_i*alpha_i for each particle
+    // the alpha_d_Ns array should be initialized with alpha_i/N_i for each particle
+    // the vdwDAs array should be initialized with vdwDA for each particle
     static const double DARAD = 0.8;
     static const double DAEPS = 0.5;
-
-    // set reduced coordinates
-
-    std::vector<Vec3> reducedPositions;
-    setReducedPositions(numParticles, particlePositions, indexIVs, reductions, reducedPositions);
 
     // loop over all particle pairs
 
     //    (1) initialize exclusion vector
     //    (2) calculate pair ixn, if not excluded
-    //    (3) accumulate forces: if particle is a site where interaction position != particle position,
-    //        then call addReducedForce() to apportion force to particle and its covalent partner
-    //        based on reduction factor
+    //    (3) accumulate forces
     //    (4) reset exclusion vector
 
     double energy = 0.0;
     std::vector<unsigned int> exclusions(numParticles, 0);
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(numParticles); ii++) {
  
-        double sigmaI      = sigmas[ii];
-        double epsilonI    = epsilons[ii];
+        double sigmaI     = sigmas[ii];
+        double G_t_alphaI = G_t_alphas[ii];
+        double alpha_d_NI = alpha_d_Ns[ii];
+        char vdwDAI       = vdwDAs[ii];
         for (int jj : allExclusions[ii])
             exclusions[jj] = 1;
 
         for (unsigned int jj = ii+1; jj < static_cast<unsigned int>(numParticles); jj++) {
             if (exclusions[jj] == 0) {
 
-                double sigmaJ      = sigmas[jj];
-                double epsilonJ    = epsilons[jj];
-                double combinedSigma   = (this->*_combineSigmas)(sigmaI, sigmaJ);
-                double combinedEpsilon = (this->_combineEpsilons == &MMFFReferenceVdwForce::mmffEpsilonCombiningRule)
-                                         ? mmffEpsilonCombiningRuleHelper(combinedSigma, epsilonI, epsilonJ, reductions[ii], reductions[jj])
-                                         : (this->*_combineEpsilons)(epsilonI, epsilonJ);
+                double sigmaJ     = sigmas[jj];
+                double G_t_alphaJ = G_t_alphas[jj];
+                double alpha_d_NJ = alpha_d_Ns[jj];
+                char vdwDAJ       = vdwDAs[jj];
+                double combinedSigma   = _mmffSigmaCombiningRule(sigmaI, sigmaJ, vdwDAI, vdwDAJ);
+                double combinedEpsilon = _mmffEpsilonCombiningRule(combinedSigma, alpha_d_NI, alpha_d_NJ, G_t_alphaI, G_t_alphaJ);
                 
                 // in MMFF, if one of the particles is an acceptor and the other one is a donor,
                 // then we want to scale sigma and epsilon
-                if ((this->_combineSigmas == &MMFFReferenceVdwForce::mmffSigmaCombiningRule)
-                    && (((sigmas[ii] < 0.0) && (sigmas[jj] > 0.0) && (epsilons[jj] < 0.0))
-                    || ((sigmas[jj] < 0.0) && (sigmas[ii] > 0.0) && (epsilons[ii] < 0.0)))) {
+                if ((vdwDAI == 'A' && vdwDAJ == 'D') || (vdwDAI == 'D' && vdwDAJ == 'A')) {
                     combinedSigma *= DARAD;
                     combinedEpsilon *= DAEPS;
                 }
 
                 Vec3 force;
-                energy += calculatePairIxn(combinedSigma, combinedEpsilon,
-                                           reducedPositions[ii], reducedPositions[jj], force);
+                energy += calculatePairIxn(combinedSigma, combinedEpsilon, particlePositions[ii], particlePositions[jj], force);
                 
-                if (indexIVs[ii] == ii) {
-                    forces[ii][0] -= force[0];
-                    forces[ii][1] -= force[1];
-                    forces[ii][2] -= force[2];
-                } else {
-                    addReducedForce(ii, indexIVs[ii], reductions[ii], -1.0, force, forces);
-                }
-                if (indexIVs[jj] == jj) {
-                    forces[jj][0] += force[0];
-                    forces[jj][1] += force[1];
-                    forces[jj][2] += force[2];
-                } else {
-                    addReducedForce(jj, indexIVs[jj], reductions[jj], 1.0, force, forces);
-                }
-
+                forces[ii][0] -= force[0];
+                forces[ii][1] -= force[1];
+                forces[ii][2] -= force[2];
+                forces[jj][0] += force[0];
+                forces[jj][1] += force[1];
+                forces[jj][2] += force[2];
             }
         }
 
@@ -383,23 +227,16 @@ double MMFFReferenceVdwForce::calculateForceAndEnergy(int numParticles,
 
 double MMFFReferenceVdwForce::calculateForceAndEnergy(int numParticles,
                                                         const vector<Vec3>& particlePositions,
-                                                        const std::vector<int>& indexIVs, 
                                                         const std::vector<double>& sigmas,
-                                                        const std::vector<double>& epsilons,
-                                                        const std::vector<double>& reductions,
+                                                        const std::vector<double>& G_t_alphas,
+                                                        const std::vector<double>& alpha_d_Ns,
+                                                        const std::vector<char>& vdwDAs,
                                                         const NeighborList& neighborList,
                                                         vector<Vec3>& forces) const {
 
-    // set reduced coordinates
-
-    std::vector<Vec3> reducedPositions;
-    setReducedPositions(numParticles, particlePositions, indexIVs, reductions, reducedPositions);
- 
     // loop over neighbor list
     //    (1) calculate pair vdw ixn
-    //    (2) accumulate forces: if particle is a site where interaction position != particle position,
-    //        then call addReducedForce() to apportion force to particle and its covalent partner
-    //        based on reduction factor
+    //    (2) accumulate forces
 
     double energy = 0.0;
     for (unsigned int ii = 0; ii < neighborList.size(); ii++) {
@@ -408,28 +245,20 @@ double MMFFReferenceVdwForce::calculateForceAndEnergy(int numParticles,
         int siteI                   = pair.first;
         int siteJ                   = pair.second;
 
-        double combinedSigma   = (this->*_combineSigmas)(sigmas[siteI], sigmas[siteJ]);
-        double combinedEpsilon = (this->*_combineEpsilons)(epsilons[siteI], epsilons[siteJ]);
+        double combinedSigma   = _mmffSigmaCombiningRule(sigmas[siteI], sigmas[siteJ], vdwDAs[siteI], vdwDAs[siteJ]);
+        double combinedEpsilon = _mmffEpsilonCombiningRule(combinedSigma, alpha_d_Ns[siteI], alpha_d_Ns[siteJ],
+                                                            G_t_alphas[siteI], G_t_alphas[siteJ]);
 
         Vec3 force;
         energy                     += calculatePairIxn(combinedSigma, combinedEpsilon,
-                                                       reducedPositions[siteI], reducedPositions[siteJ], force);
+                                                        particlePositions[siteI], particlePositions[siteJ], force);
                 
-        if (indexIVs[siteI] == siteI) {
-            forces[siteI][0] -= force[0];
-            forces[siteI][1] -= force[1];
-            forces[siteI][2] -= force[2];
-        } else {
-            addReducedForce(siteI, indexIVs[siteI], reductions[siteI], -1.0, force, forces);
-        }
-        if (indexIVs[siteJ] == siteJ) {
-            forces[siteJ][0] += force[0];
-            forces[siteJ][1] += force[1];
-            forces[siteJ][2] += force[2];
-        } else {
-            addReducedForce(siteJ, indexIVs[siteJ], reductions[siteJ], 1.0, force, forces);
-        }
-
+        forces[siteI][0] -= force[0];
+        forces[siteI][1] -= force[1];
+        forces[siteI][2] -= force[2];
+        forces[siteJ][0] += force[0];
+        forces[siteJ][1] += force[1];
+        forces[siteJ][2] += force[2];
     }
 
     return energy;

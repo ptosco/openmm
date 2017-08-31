@@ -867,31 +867,30 @@ void ReferenceCalcMMFFVdwForceKernel::initialize(const System& system, const MMF
 
     numParticles = system.getNumParticles();
 
-    indexIVs.resize(numParticles);
     allExclusions.resize(numParticles);
     sigmas.resize(numParticles);
-    epsilons.resize(numParticles);
-    reductions.resize(numParticles);
+    G_t_alphas.resize(numParticles);
+    alpha_d_Ns.resize(numParticles);
+    vdwDAs.resize(numParticles);
 
     for (int ii = 0; ii < numParticles; ii++) {
 
         int indexIV;
-        double sigma, epsilon, reduction;
+        double sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
         std::vector<int> exclusions;
 
-        force.getParticleParameters(ii, indexIV, sigma, epsilon, reduction);
+        force.getParticleParameters(ii, sigma, G_t_alpha, alpha_d_N, vdwDA);
         force.getParticleExclusions(ii, exclusions);
         for (unsigned int jj = 0; jj < exclusions.size(); jj++) {
            allExclusions[ii].insert(exclusions[jj]);
         }
 
-        indexIVs[ii]      = indexIV;
         sigmas[ii]        = sigma;
-        epsilons[ii]      = epsilon;
-        reductions[ii]    = reduction;
+        G_t_alphas[ii]    = G_t_alpha;
+        alpha_d_Ns[ii]    = alpha_d_N;
+        vdwDAs[ii]        = vdwDA;
     }   
-    sigmaCombiningRule     = force.getSigmaCombiningRule();
-    epsilonCombiningRule   = force.getEpsilonCombiningRule();
     useCutoff              = (force.getNonbondedMethod() != MMFFVdwForce::NoCutoff);
     usePBC                 = (force.getNonbondedMethod() == MMFFVdwForce::CutoffPeriodic);
     cutoff                 = force.getCutoffDistance();
@@ -904,7 +903,7 @@ double ReferenceCalcMMFFVdwForceKernel::execute(ContextImpl& context, bool inclu
 
     vector<Vec3>& posData   = extractPositions(context);
     vector<Vec3>& forceData = extractForces(context);
-    MMFFReferenceVdwForce vdwForce(sigmaCombiningRule, epsilonCombiningRule);
+    MMFFReferenceVdwForce vdwForce;
     double energy;
     if (useCutoff) {
         vdwForce.setCutoff(cutoff);
@@ -917,14 +916,14 @@ double ReferenceCalcMMFFVdwForceKernel::execute(ContextImpl& context, bool inclu
                 throw OpenMMException("The periodic box size has decreased to less than twice the cutoff.");
             }
             vdwForce.setPeriodicBox(boxVectors);
-            energy  = vdwForce.calculateForceAndEnergy(numParticles, posData, indexIVs, sigmas, epsilons, reductions, *neighborList, forceData);
+            energy  = vdwForce.calculateForceAndEnergy(numParticles, posData, sigmas, G_t_alphas, alpha_d_Ns, vdwDAs, *neighborList, forceData);
             energy += dispersionCoefficient/(boxVectors[0][0]*boxVectors[1][1]*boxVectors[2][2]);
         } else {
             vdwForce.setNonbondedMethod(MMFFReferenceVdwForce::CutoffNonPeriodic);
         }
     } else {
         vdwForce.setNonbondedMethod(MMFFReferenceVdwForce::NoCutoff);
-        energy = vdwForce.calculateForceAndEnergy(numParticles, posData, indexIVs, sigmas, epsilons, reductions, allExclusions, forceData);
+        energy = vdwForce.calculateForceAndEnergy(numParticles, posData, sigmas, G_t_alphas, alpha_d_Ns, vdwDAs, allExclusions, forceData);
     }
     return static_cast<double>(energy);
 }
@@ -936,13 +935,13 @@ void ReferenceCalcMMFFVdwForceKernel::copyParametersToContext(ContextImpl& conte
     // Record the values.
 
     for (int i = 0; i < numParticles; ++i) {
-        int indexIV;
-        double sigma, epsilon, reduction;
-        force.getParticleParameters(i, indexIV, sigma, epsilon, reduction);
-        indexIVs[i] = indexIV;
+        double sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
         sigmas[i] = sigma;
-        epsilons[i] = epsilon;
-        reductions[i]= reduction;
+        G_t_alphas[i] = G_t_alpha;
+        alpha_d_Ns[i] = alpha_d_N;
+        vdwDAs[i]= vdwDA;
     }
 }
 

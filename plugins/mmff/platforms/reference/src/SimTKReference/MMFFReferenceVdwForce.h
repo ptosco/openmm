@@ -33,7 +33,6 @@
 namespace OpenMM {
 
 class MMFFReferenceVdwForce;
-typedef double (MMFFReferenceVdwForce::*CombiningFunction)(double x, double y) const;
 
 // ---------------------------------------------------------------------------------------
 
@@ -71,15 +70,6 @@ public:
        --------------------------------------------------------------------------------------- */
  
     MMFFReferenceVdwForce();
- 
-    /**---------------------------------------------------------------------------------------
-       
-       Constructor
-       
-       --------------------------------------------------------------------------------------- */
- 
-    MMFFReferenceVdwForce(const std::string& sigmaCombiningRule,
-                            const std::string& epsilonCombiningRule);
  
     /**---------------------------------------------------------------------------------------
        
@@ -121,53 +111,13 @@ public:
 
     /**---------------------------------------------------------------------------------------
     
-       Set cutof
+       Set cutoff
     
        @param cutoff
     
        --------------------------------------------------------------------------------------- */
     
     void setCutoff(double cutoff);
-
-    /**---------------------------------------------------------------------------------------
-    
-       Set sigma combining rule
-    
-       @param sigmaCombiningRule      rule: GEOMETRIC, CUBIC-MEAN, ARITHMETIC (default)
-    
-       --------------------------------------------------------------------------------------- */
-    
-    void setSigmaCombiningRule(const std::string& sigmaCombiningRule);
-
-    /**---------------------------------------------------------------------------------------
-    
-       Get sigma combining rule
-    
-       @return sigmaCombiningRule
-    
-       --------------------------------------------------------------------------------------- */
-    
-    std::string getSigmaCombiningRule() const;
-
-    /**---------------------------------------------------------------------------------------
-    
-       Set epsilon combining rule
-    
-       @param epsilonCombiningRule      rule: GEOMETRIC, CUBIC-MEAN, ARITHMETIC (default)
-    
-       --------------------------------------------------------------------------------------- */
-    
-    void setEpsilonCombiningRule(const std::string& epsilonCombiningRule);
-
-    /**---------------------------------------------------------------------------------------
-    
-       Get epsilon combining rule
-    
-       @return epsilonCombiningRule
-    
-       --------------------------------------------------------------------------------------- */
-    
-    std::string getEpsilonCombiningRule() const;
 
     /**---------------------------------------------------------------------------------------
     
@@ -185,10 +135,10 @@ public:
     
        @param numParticles            number of particles
        @param particlePositions       Cartesian coordinates of particles
-       @param indexIVs                position index for associated reducing particle
        @param sigmas                  particle sigmas 
-       @param epsilons                particle epsilons
-       @param reductions              particle reduction factors
+       @param G_t_alphas              particle G*alpha
+       @param alpha_d_Ns              particle alpha/N
+       @param vdwDAs                  particle DA status ('-', 'D', 'A')
        @param vdwExclusions           particle exclusions
        @param forces                  add forces to this vector
     
@@ -197,9 +147,10 @@ public:
        --------------------------------------------------------------------------------------- */
     
     double calculateForceAndEnergy(int numParticles, const std::vector<OpenMM::Vec3>& particlePositions,
-                                   const std::vector<int>& indexIVs, 
-                                   const std::vector<double>& sigmas, const std::vector<double>& epsilons,
-                                   const std::vector<double>& reductions,
+                                   const std::vector<double>& sigmas,
+                                   const std::vector<double>& G_t_alphas,
+                                   const std::vector<double>& alpha_d_Ns,
+                                   const std::vector<char>& vdwDAs,
                                    const std::vector< std::set<int> >& vdwExclusions,
                                    std::vector<OpenMM::Vec3>& forces) const;
          
@@ -209,10 +160,10 @@ public:
     
        @param numParticles            number of particles
        @param particlePositions       Cartesian coordinates of particles
-       @param indexIVs                position index for associated reducing particle
        @param sigmas                  particle sigmas 
-       @param epsilons                particle epsilons
-       @param reductions              particle reduction factors
+       @param G_t_alphas              particle G*alpha
+       @param alpha_d_Ns              particle alpha/N
+       @param vdwDAs                  particle DA status ('-', 'D', 'A')
        @param neighborList            neighbor list
        @param forces                  add forces to this vector
     
@@ -221,9 +172,10 @@ public:
        --------------------------------------------------------------------------------------- */
     
     double calculateForceAndEnergy(int numParticles, const std::vector<OpenMM::Vec3>& particlePositions, 
-                                   const std::vector<int>& indexIVs, 
-                                   const std::vector<double>& sigmas, const std::vector<double>& epsilons,
-                                   const std::vector<double>& reductions,
+                                   const std::vector<double>& sigmas,
+                                   const std::vector<double>& G_t_alphas,
+                                   const std::vector<double>& alpha_d_Ns,
+                                   const std::vector<char>& vdwDAs,
                                    const NeighborList& neighborList,
                                    std::vector<OpenMM::Vec3>& forces) const;
          
@@ -235,67 +187,16 @@ private:
     static const int C4=1;
     static const int C5=2;
 
-    std::string _sigmaCombiningRule;
-    std::string _epsilonCombiningRule;
     NonbondedMethod _nonbondedMethod;
     double _cutoff;
     double _taperCutoffFactor;
     double _taperCutoff;
     double _taperCoefficients[3];
     Vec3 _periodicBoxVectors[3];
-    CombiningFunction _combineSigmas;
-    double arithmeticSigmaCombiningRule(double sigmaI, double sigmaJ) const;
-    double  geometricSigmaCombiningRule(double sigmaI, double sigmaJ) const;
-    double  cubicMeanSigmaCombiningRule(double sigmaI, double sigmaJ) const;
-    double       mmffSigmaCombiningRule(double sigmaI, double sigmaJ) const;
-
-    CombiningFunction _combineEpsilons;
-    double arithmeticEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double  geometricEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double   harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double        hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double        mmffEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    static double mmffEpsilonCombiningRuleHelper(double combinedSigma,
+    static double _mmffSigmaCombiningRule(double sigmaI, double sigmaJ, char vdwDAI, char vdwDAJ);
+    static double _mmffEpsilonCombiningRule(double combinedSigma,
         double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ);
 
-    /**---------------------------------------------------------------------------------------
-    
-       Set reduced positions: position used to calculate vdw interaction is moved towards 
-       covalent partner
-       
-    
-       @param  numParticles         number of particles
-       @param  particlePositions    current particle positions
-       @param  indexIVs             particle index of covalent partner
-       @param  reductions           fraction of bond length to move particle interacting site;
-                                    reductions[i] = zero, 
-                                    if interacting position == particle position
-       @param  reducedPositions     output: modfied or original position depending on whether
-                                    reduction factor is nonzero
-    
-       --------------------------------------------------------------------------------------- */
-    
-    void setReducedPositions(int numParticles, const std::vector<Vec3>& particlePositions,
-                             const std::vector<int>& indexIVs, const std::vector<double>& reductions,
-                             std::vector<Vec3>& reducedPositions) const;
-
-    /**---------------------------------------------------------------------------------------
-    
-       Add reduced forces to force vector
-    
-       @param  particleI            index of particleI
-       @param  particleIV           index of particleIV
-       @param  reduction            reduction factor
-       @param  sign                 +1 or -1 for add/sutracting forces
-       @param  force                force vector to add
-       @param  forces               force vector for particles
-    
-       --------------------------------------------------------------------------------------- */
-    
-    void addReducedForce(unsigned int particleI, unsigned int particleIV,
-                         double reduction, double sign,
-                         Vec3& force, std::vector<OpenMM::Vec3>& forces) const;
-    
     /**---------------------------------------------------------------------------------------
     
        Set taper coefficients
@@ -310,8 +211,8 @@ private:
     
        Calculate pair ixn
     
-       @param  combindedSigma       combined sigmas
-       @param  combindedEpsilon     combined epsilons
+       @param  combinedSigma        combined sigmas
+       @param  combinedEpsilon      combined epsilons
        @param  particleIPosition    particle I position 
        @param  particleJPosition    particle J position 
        @param  force                output force
@@ -320,7 +221,7 @@ private:
 
        --------------------------------------------------------------------------------------- */
     
-    double calculatePairIxn(double combindedSigma, double combindedEpsilon,
+    double calculatePairIxn(double combinedSigma, double combinedEpsilon,
                             const Vec3& particleIPosition, const Vec3& particleJPosition,
                             Vec3& force) const;
 

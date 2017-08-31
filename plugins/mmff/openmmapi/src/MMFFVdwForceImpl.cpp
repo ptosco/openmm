@@ -87,22 +87,19 @@ double MMFFVdwForceImpl::calcDispersionCorrection(const System& system, const MM
     // Identify all particle classes (defined by sigma and epsilon and reduction), and count the number of
     // particles in each class.
 
-    map<pair<double, double>, int> classCounts;
+    map<MMFFVdwParams, int> classCounts;
     for (int i = 0; i < force.getNumParticles(); i++) {
-        double sigma, epsilon, reduction;
-        // The variables reduction, ivindex are not used.
-        int ivindex;
-        // Get the sigma and epsilon parameters, ignoring everything else.
-        force.getParticleParameters(i, ivindex, sigma, epsilon, reduction);
-        pair<double, double> key = make_pair(sigma, epsilon);
-        map<pair<double, double>, int>::iterator entry = classCounts.find(key);
+        MMFFVdwParams key;
+        // Get the sigma, G*alpha, alpha/N and vdwDA parameters.
+        force.getParticleParameters(i, key.sigma, key.G_t_alpha, key.alpha_d_N, key.vdwDA);
+        map<MMFFVdwParams, int>::iterator entry = classCounts.find(key);
         if (entry == classCounts.end())
             classCounts[key] = 1;
         else
             entry->second++;
     }
 
-    // Compute the VdW tapering coefficients.  Mostly copied from mmffCudaGpu.cpp.
+    // Compute the VdW tapering coefficients.
     double cutoff = force.getCutoffDistance();
     double vdwTaper = 0.90; // vdwTaper is a scaling factor, it is not a distance.
     double c0 = 0.0;
@@ -151,61 +148,36 @@ double MMFFVdwForceImpl::calcDispersionCorrection(const System& system, const MM
     int ndelta = int(double(nstep) * (range - cut));
     double rdelta = (range - cut) / double(ndelta);
     double offset = cut - 0.5 * rdelta;
-    double dhal = 0.07; // This magic number also appears in kCalculateMMFFCudaVdw14_7.cu
-    double ghal = 0.12; // This magic number also appears in kCalculateMMFFCudaVdw14_7.cu
+    double dhal = 0.07; // This magic number also appears in mmffVdwForce2.cu
+    double ghal = 0.12; // This magic number also appears in mmffVdwForce2.cu
     double elrc = 0.0; // This number is incremented and passed out at the end
     double e = 0.0;
     double sigma, epsilon; // The pairwise sigma and epsilon parameters.
     int i = 0, k = 0; // Loop counters.
+    static const double B = 0.2;
+    static const double Beta = 12.0;
+    static const double C4 = 7.5797344e-4;
+    static const double DARAD = 0.8;
+    static const double DAEPS = 0.5;
 
     // Double loop over different atom types.
-    std::string sigmaCombiningRule = force.getSigmaCombiningRule();
-    std::string epsilonCombiningRule = force.getEpsilonCombiningRule();
     for (auto& class1 : classCounts) {
         k = 0;
         for (auto& class2 : classCounts) { 
             // MMFF combining rules, copied over from the CUDA code.
-            double iSigma = class1.first.first;
-            double jSigma = class2.first.first;
-            double iEpsilon = class1.first.second;
-            double jEpsilon = class2.first.second;
-            // ARITHMETIC = 1
-            // GEOMETRIC  = 2
-            // CUBIC-MEAN = 3
-            if (sigmaCombiningRule == "ARITHMETIC") {
-              sigma = iSigma + jSigma;
-            } else if (sigmaCombiningRule == "GEOMETRIC") {
-              sigma = 2.0f * std::sqrt(iSigma * jSigma);
-            } else {
-              double iSigma2 = iSigma*iSigma;
-              double jSigma2 = jSigma*jSigma;
-              if ((iSigma2 + jSigma2) != 0.0) {
-                sigma = 2.0f * (iSigma2 * iSigma + jSigma2 * jSigma) / (iSigma2 + jSigma2);
-              } else {
-                sigma = 0.0;
-              }
-            }
-            // ARITHMETIC = 1
-            // GEOMETRIC  = 2
-            // HARMONIC   = 3
-            // HHG        = 4
-            if (epsilonCombiningRule == "ARITHMETIC") {
-              epsilon = 0.5f * (iEpsilon + jEpsilon);
-            } else if (epsilonCombiningRule == "GEOMETRIC") {
-              epsilon = std::sqrt(iEpsilon * jEpsilon);
-            } else if (epsilonCombiningRule == "HARMONIC") {
-              if ((iEpsilon + jEpsilon) != 0.0) {
-                epsilon = 2.0f * (iEpsilon * jEpsilon) / (iEpsilon + jEpsilon);
-              } else {
-                epsilon = 0.0;
-              }
-            } else {
-              double epsilonS = std::sqrt(iEpsilon) + std::sqrt(jEpsilon);
-              if (epsilonS != 0.0) {
-                epsilon = 4.0f * (iEpsilon * jEpsilon) / (epsilonS * epsilonS);
-              } else {
-                epsilon = 0.0;
-              }
+            bool haveDAPair = (class1.first.vdwDA == 'D' && class2.first.vdwDA == 'A')
+                || (class1.first.vdwDA == 'A' && class2.first.vdwDA == 'D');
+            bool haveDonor = (class1.first.vdwDA == 'D' || class2.first.vdwDA == 'D');
+            double gamma = (class1.first.sigma - class2.first.sigma) / (class1.first.sigma + class2.first.sigma);
+            sigma = 0.5 * (class1.first.sigma + class2.first.sigma) * (1.0 + (haveDonor
+                ? 0.0 : B * (1.0 - exp(-Beta * gamma * gamma))));
+            double sigmaSq = sigma * sigma;
+            epsilon = C4 * class1.first.G_t_alpha * class2.first.G_t_alpha
+                / ((sqrt(class1.first.alpha_d_N) + sqrt(class2.first.alpha_d_N))
+                * sigmaSq * sigmaSq * sigmaSq);
+            if (haveDAPair) {
+              sigma *= DARAD;
+              epsilon *= DAEPS;
             }
             int count = class1.second * class2.second;
             // Below is an exact copy of stuff from the previous block.

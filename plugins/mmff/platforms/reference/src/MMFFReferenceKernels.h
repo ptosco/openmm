@@ -411,13 +411,11 @@ private:
     int usePBC;
     double cutoff;
     double dispersionCoefficient;
-    std::vector<int> indexIVs;
     std::vector< std::set<int> > allExclusions;
     std::vector<double> sigmas;
-    std::vector<double> epsilons;
-    std::vector<double> reductions;
-    std::string sigmaCombiningRule;
-    std::string epsilonCombiningRule;
+    std::vector<double> G_t_alphas;
+    std::vector<double> alpha_d_Ns;
+    std::vector<char> vdwDAs;
     const System& system;
     NeighborList* neighborList;
 };

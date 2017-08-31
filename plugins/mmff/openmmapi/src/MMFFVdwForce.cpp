@@ -38,44 +38,28 @@ using namespace OpenMM;
 using std::string;
 using std::vector;
 
-MMFFVdwForce::MMFFVdwForce() : nonbondedMethod(NoCutoff), sigmaCombiningRule("CUBIC-MEAN"), epsilonCombiningRule("HHG"), cutoff(1.0e+10), useDispersionCorrection(true) {
+MMFFVdwForce::MMFFVdwForce() : nonbondedMethod(NoCutoff), cutoff(1.0e+10), useDispersionCorrection(true) {
 }
 
-int MMFFVdwForce::addParticle(int parentIndex, double sigma, double epsilon, double reductionFactor) {
-    parameters.push_back(VdwInfo(parentIndex, sigma, epsilon, reductionFactor));
+int MMFFVdwForce::addParticle(double sigma, double G_t_alpha, double alpha_d_N, char vdwDA) {
+    parameters.push_back(VdwInfo(sigma, G_t_alpha, alpha_d_N, vdwDA));
     return parameters.size()-1;
 }
 
-void MMFFVdwForce::getParticleParameters(int particleIndex, int& parentIndex,
-                                           double& sigma, double& epsilon, double& reductionFactor) const {
-    parentIndex     = parameters[particleIndex].parentIndex;
+void MMFFVdwForce::getParticleParameters(int particleIndex, double& sigma,
+                                        double& G_t_alpha, double& alpha_d_N, char& vdwDA) const {
     sigma           = parameters[particleIndex].sigma;
-    epsilon         = parameters[particleIndex].epsilon;
-    reductionFactor = parameters[particleIndex].reductionFactor;
+    G_t_alpha       = parameters[particleIndex].G_t_alpha;
+    alpha_d_N       = parameters[particleIndex].alpha_d_N;
+    vdwDA           = parameters[particleIndex].vdwDA;
 }
 
-void MMFFVdwForce::setParticleParameters(int particleIndex, int parentIndex,
-                                           double sigma, double epsilon, double reductionFactor) {
-    parameters[particleIndex].parentIndex     = parentIndex;
+void MMFFVdwForce::setParticleParameters(int particleIndex, double sigma,
+                                        double G_t_alpha, double alpha_d_N, char vdwDA) {
     parameters[particleIndex].sigma           = sigma;
-    parameters[particleIndex].epsilon         = epsilon;
-    parameters[particleIndex].reductionFactor = reductionFactor;
-}
-
-void MMFFVdwForce::setSigmaCombiningRule(const std::string& inputSigmaCombiningRule) {
-    sigmaCombiningRule = inputSigmaCombiningRule;
-}
-
-const std::string& MMFFVdwForce::getSigmaCombiningRule() const {
-    return sigmaCombiningRule;
-}
-
-void MMFFVdwForce::setEpsilonCombiningRule(const std::string& inputEpsilonCombiningRule) {
-    epsilonCombiningRule = inputEpsilonCombiningRule;
-}
-
-const std::string& MMFFVdwForce::getEpsilonCombiningRule() const {
-    return epsilonCombiningRule;
+    parameters[particleIndex].G_t_alpha       = G_t_alpha;
+    parameters[particleIndex].alpha_d_N       = alpha_d_N;
+    parameters[particleIndex].vdwDA           = vdwDA;
 }
 
 void MMFFVdwForce::setParticleExclusions(int particleIndex, const std::vector< int >& inputExclusions) {

@@ -46,8 +46,6 @@ void MMFFVdwForceProxy::serialize(const void* object, SerializationNode& node) c
     const MMFFVdwForce& force = *reinterpret_cast<const MMFFVdwForce*>(object);
 
     node.setIntProperty("forceGroup", force.getForceGroup());
-    node.setStringProperty("SigmaCombiningRule", force.getSigmaCombiningRule());
-    node.setStringProperty("EpsilonCombiningRule", force.getEpsilonCombiningRule());
     node.setDoubleProperty("VdwCutoff", force.getCutoffDistance());
 
     node.setIntProperty("method", (int) force.getNonbondedMethod());
@@ -55,12 +53,12 @@ void MMFFVdwForceProxy::serialize(const void* object, SerializationNode& node) c
     SerializationNode& particles = node.createChildNode("VdwParticles");
     for (unsigned int ii = 0; ii < static_cast<unsigned int>(force.getNumParticles()); ii++) {
 
-        int ivIndex;
-        double sigma, epsilon, reductionFactor;
-        force.getParticleParameters(ii, ivIndex, sigma, epsilon, reductionFactor);
+        double sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(ii, sigma, G_t_alpha, alpha_d_N, vdwDA);
 
         SerializationNode& particle = particles.createChildNode("Particle");
-        particle.setIntProperty("ivIndex", ivIndex).setDoubleProperty("sigma", sigma).setDoubleProperty("epsilon", epsilon).setDoubleProperty("reductionFactor", reductionFactor);
+        particle.setDoubleProperty("sigma", sigma).setDoubleProperty("G_t_alpha", G_t_alpha).setDoubleProperty("alpha_d_N", alpha_d_N).setCharProperty("vdwDA", vdwDA);
 
         std::vector< int > exclusions;
         force.getParticleExclusions(ii,  exclusions);
@@ -80,15 +78,13 @@ void* MMFFVdwForceProxy::deserialize(const SerializationNode& node) const {
     try {
         if (version > 1)
             force->setForceGroup(node.getIntProperty("forceGroup", 0));
-        force->setSigmaCombiningRule(node.getStringProperty("SigmaCombiningRule"));
-        force->setEpsilonCombiningRule(node.getStringProperty("EpsilonCombiningRule"));
         force->setCutoffDistance(node.getDoubleProperty("VdwCutoff"));
         force->setNonbondedMethod((MMFFVdwForce::NonbondedMethod) node.getIntProperty("method"));
 
         const SerializationNode& particles = node.getChildNode("VdwParticles");
         for (unsigned int ii = 0; ii < particles.getChildren().size(); ii++) {
             const SerializationNode& particle = particles.getChildren()[ii];
-            force->addParticle(particle.getIntProperty("ivIndex"), particle.getDoubleProperty("sigma"), particle.getDoubleProperty("epsilon"), particle.getDoubleProperty("reductionFactor"));
+            force->addParticle(particle.getDoubleProperty("sigma"), particle.getDoubleProperty("G_t_alpha"), particle.getDoubleProperty("alpha_d_N"), particle.getCharProperty("vdwDA"));
 
             // exclusions
 

@@ -70,6 +70,21 @@ public:
     static double calcDispersionCorrection(const System& system, const MMFFVdwForce& force);
     void updateParametersInContext(ContextImpl& context);
 private:
+    struct MMFFVdwParams {
+        double sigma;
+        double G_t_alpha;
+        double alpha_d_N;
+        char vdwDA;
+        bool operator==(const MMFFVdwParams &o)  const {
+            return (sigma == o.sigma && G_t_alpha == o.G_t_alpha && alpha_d_N == o.alpha_d_N && vdwDA == o.vdwDA);
+        }
+        bool operator<(const MMFFVdwParams &o)  const {
+            return (sigma < o.sigma
+                || (sigma == o.sigma && G_t_alpha < o.G_t_alpha)
+                || (sigma == o.sigma && G_t_alpha == o.G_t_alpha && alpha_d_N < o.alpha_d_N)
+                || (sigma == o.sigma && G_t_alpha == o.G_t_alpha && alpha_d_N == o.alpha_d_N && vdwDA < o.vdwDA));
+        }
+    };
     const MMFFVdwForce& owner;
     Kernel kernel;
 };

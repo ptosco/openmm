@@ -62,27 +62,22 @@ void testVdw() {
     System system;
     int numberOfParticles          = 6;
     MMFFVdwForce* mmffVdwForce = new MMFFVdwForce();
-    std::string sigmaCombiningRule = std::string("CUBIC-MEAN");
-    mmffVdwForce->setSigmaCombiningRule(sigmaCombiningRule);
-
-    std::string epsilonCombiningRule = std::string("HHG");
-    mmffVdwForce->setEpsilonCombiningRule(epsilonCombiningRule);
     for (int ii = 0; ii < numberOfParticles; ii++) {
-        int indexIV;
-        double mass, sigma, epsilon, reduction;
+        double mass, sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
         std::vector< int > exclusions;
         if (ii == 0 || ii == 3) {
             mass        = 16.0;
-            indexIV     = ii;
             sigma       = 1.70250E+00;
-            epsilon     = 1.10000E-01;
-            reduction   = 0.0;
+            G_t_alpha   = 1.10000E-01;
+            alpha_d_N   = 0.0;
+            vdwDA = 'A';
         } else {
             mass        = 1.0;
-            indexIV     = ii < 3 ? 0 : 3;
             sigma       = 1.32750E+00;
-            epsilon     = 1.35000E-02;
-            reduction   = 0.91;
+            G_t_alpha   = 1.35000E-02;
+            alpha_d_N   = 0.91;
+            vdwDA = 'D';
         }
 
         // exclusions
@@ -97,7 +92,7 @@ void testVdw() {
             exclusions.push_back (5);
         }
         system.addParticle(mass);
-        mmffVdwForce->addParticle(indexIV, sigma, epsilon, reduction);
+        mmffVdwForce->addParticle(sigma, G_t_alpha, alpha_d_N, vdwDA);
         mmffVdwForce->setParticleExclusions(ii, exclusions);
     }
     LangevinIntegrator integrator(0.0, 0.1, 0.01);
@@ -138,12 +133,11 @@ void testVdw() {
         positions[ii][2] *= AngstromToNm;
     }
     for (int ii = 0; ii < mmffVdwForce->getNumParticles();  ii++) {
-        int indexIV;
-        double sigma, epsilon, reduction;
-        mmffVdwForce->getParticleParameters(ii, indexIV, sigma, epsilon, reduction);
+        double sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        mmffVdwForce->getParticleParameters(ii, sigma, G_t_alpha, alpha_d_N, vdwDA);
         sigma        *= AngstromToNm;
-        epsilon      *= CalToJoule;
-        mmffVdwForce->setParticleParameters(ii, indexIV, sigma, epsilon, reduction);
+        mmffVdwForce->setParticleParameters(ii, sigma, G_t_alpha, alpha_d_N, vdwDA);
     }
     platformName = "CUDA";
     Context context(system, integrator, Platform::getPlatformByName(platformName));
@@ -168,10 +162,10 @@ void testVdw() {
     // Try changing the particle parameters and make sure it's still correct.
     
     for (int i = 0; i < numberOfParticles; i++) {
-        int indexIV;
-        double mass, sigma, epsilon, reduction;
-        mmffVdwForce->getParticleParameters(i, indexIV, sigma, epsilon, reduction);
-        mmffVdwForce->setParticleParameters(i, indexIV, 0.9*sigma, 2.0*epsilon, 0.95*reduction);
+        double mass, sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        mmffVdwForce->getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        mmffVdwForce->setParticleParameters(i, 0.9*sigma, 2.0*G_t_alpha, 0.95*alpha_d_N, vdwDA);
     }
     LangevinIntegrator integrator2(0.0, 0.1, 0.01);
     Context context2(system, integrator2, Platform::getPlatformByName(platformName));
@@ -195,16 +189,13 @@ void testVdw() {
     ASSERT_EQUAL_TOL(state1.getPotentialEnergy(), state2.getPotentialEnergy(), tolerance);
 }
 
-void setupAndGetForcesEnergyVdwAmmonia(const std::string& sigmaCombiningRule, const std::string& epsilonCombiningRule, double cutoff,
-                                       double boxDimension, std::vector<Vec3>& forces, double& energy) {
+void setupAndGetForcesEnergyVdwAmmonia(double cutoff, double boxDimension, std::vector<Vec3>& forces, double& energy) {
 
     // beginning of Vdw setup
 
     System system;
     MMFFVdwForce* mmffVdwForce        = new MMFFVdwForce();;
     int numberOfParticles                 = 8;
-    mmffVdwForce->setSigmaCombiningRule(sigmaCombiningRule);
-    mmffVdwForce->setEpsilonCombiningRule(epsilonCombiningRule);
     mmffVdwForce->setCutoff(cutoff);
     if (boxDimension > 0.0) {
         Vec3 a(boxDimension, 0.0, 0.0);
@@ -221,28 +212,28 @@ void setupAndGetForcesEnergyVdwAmmonia(const std::string& sigmaCombiningRule, co
     // addParticle: ivIndex, radius, epsilon, reductionFactor
 
     system.addParticle(  1.4007000e+01);
-    mmffVdwForce->addParticle(0,   1.8550000e-01,   4.3932000e-01,   0.0000000e+00);
+    mmffVdwForce->addParticle(1.8550000e-01,   4.3932000e-01,   0.0000000e+00,   'A');
 
     system.addParticle(  1.0080000e+00);
-    mmffVdwForce->addParticle(0,   1.3500000e-01,   8.3680000e-02,   9.1000000e-01);
+    mmffVdwForce->addParticle(1.3500000e-01,   8.3680000e-02,   9.1000000e-01,   'D');
 
     system.addParticle(  1.0080000e+00);
-    mmffVdwForce->addParticle(0,   1.3500000e-01,   8.3680000e-02,   9.1000000e-01);
+    mmffVdwForce->addParticle(1.3500000e-01,   8.3680000e-02,   9.1000000e-01,   'D');
 
     system.addParticle(  1.0080000e+00);
-    mmffVdwForce->addParticle(0,   1.3500000e-01,   8.3680000e-02,   9.1000000e-01);
+    mmffVdwForce->addParticle(1.3500000e-01,   8.3680000e-02,   9.1000000e-01,   'D');
 
     system.addParticle(  1.4007000e+01);
-    mmffVdwForce->addParticle(4,   1.8550000e-01,   4.3932000e-01,   0.0000000e+00);
+    mmffVdwForce->addParticle(1.8550000e-01,   4.3932000e-01,   0.0000000e+00,   'A');
 
     system.addParticle(  1.0080000e+00);
-    mmffVdwForce->addParticle(4,   1.3500000e-01,   8.3680000e-02,   9.1000000e-01);
+    mmffVdwForce->addParticle(1.3500000e-01,   8.3680000e-02,   9.1000000e-01,   'D');
 
     system.addParticle(  1.0080000e+00);
-    mmffVdwForce->addParticle(4,   1.3500000e-01,   8.3680000e-02,   9.1000000e-01);
+    mmffVdwForce->addParticle(1.3500000e-01,   8.3680000e-02,   9.1000000e-01,   'D');
 
     system.addParticle(  1.0080000e+00);
-    mmffVdwForce->addParticle(4,   1.3500000e-01,   8.3680000e-02,   9.1000000e-01);
+    mmffVdwForce->addParticle(1.3500000e-01,   8.3680000e-02,   9.1000000e-01,   'D');
 
     // ParticleExclusions
 
@@ -340,9 +331,9 @@ void compareForcesEnergy(std::string& testName, double expectedEnergy, double en
 
 // test VDW w/ sigmaRule=CubicMean and epsilonRule=HHG
 
-void testVdwAmmoniaCubicMeanHhg() {
+void testVdwAmmonia() {
 
-    std::string testName      = "testVdwAmmoniaCubicMeanHhg";
+    std::string testName      = "testVdwAmmonia";
 
     int numberOfParticles     = 8;
     double boxDimension       = -1.0;
@@ -350,7 +341,7 @@ void testVdwAmmoniaCubicMeanHhg() {
     std::vector<Vec3> forces;
     double energy;
 
-    setupAndGetForcesEnergyVdwAmmonia("CUBIC-MEAN", "HHG", cutoff, boxDimension, forces, energy);
+    setupAndGetForcesEnergyVdwAmmonia(cutoff, boxDimension, forces, energy);
     std::vector<Vec3> expectedForces(numberOfParticles);
 
     double expectedEnergy     =  4.8012258e+00;
@@ -368,96 +359,6 @@ void testVdwAmmoniaCubicMeanHhg() {
     compareForcesEnergy(testName, expectedEnergy, energy, expectedForces, forces, tolerance);
 }
 
-// test VDW w/ sigmaRule=Arithmetic and epsilonRule=Arithmetic
-
-void testVdwAmmoniaArithmeticArithmetic() {
-
-    std::string testName      = "testVdwAmmoniaArithmeticArithmetic";
-
-    int numberOfParticles     = 8;
-    double boxDimension       = -1.0;
-    double cutoff             = 9000000.0;
-
-    std::vector<Vec3> forces;
-    double energy;
-    setupAndGetForcesEnergyVdwAmmonia("ARITHMETIC", "ARITHMETIC", cutoff, boxDimension, forces, energy);
-    std::vector<Vec3> expectedForces(numberOfParticles);
-
-    double expectedEnergy     =  4.2252403e+00;
-
-    expectedForces[0]         = Vec3(  3.0603839e+02,  -1.5550310e-02,  -7.2661707e+00);
-    expectedForces[1]         = Vec3( -2.7801357e+00,   5.8805051e-01,  -2.5907269e-01);
-    expectedForces[2]         = Vec3( -2.7753968e+00,  -5.8440732e-01,  -2.5969111e-01);
-    expectedForces[3]         = Vec3( -2.2496416e+00,  -1.1797440e-03,   5.5501757e-01);
-    expectedForces[4]         = Vec3( -5.5077629e+01,   8.3417114e-04,  -3.3668921e-01);
-    expectedForces[5]         = Vec3(  2.3752452e+00,  -4.6788669e-01,  -2.4907764e-01);
-    expectedForces[6]         = Vec3( -2.4790697e+02,   1.1419770e-02,   8.0629999e+00);
-    expectedForces[7]         = Vec3(  2.3761408e+00,   4.6871961e-01,  -2.4731607e-01);
-
-    double tolerance          = 1.0e-04;
-    compareForcesEnergy(testName, expectedEnergy, energy, expectedForces, forces, tolerance);
-}
-
-// test VDW w/ sigmaRule=Geometric and epsilonRule=Geometric
-
-void testVdwAmmoniaGeometricGeometric() {
-
-    std::string testName      = "testVdwAmmoniaGeometricGeometric";
-
-    int numberOfParticles     = 8;
-    double boxDimension       = -1.0;
-    double cutoff             = 9000000.0;
-    std::vector<Vec3> forces;
-    double energy;
-    setupAndGetForcesEnergyVdwAmmonia("GEOMETRIC", "GEOMETRIC", cutoff, boxDimension, forces, energy);
-    std::vector<Vec3> expectedForces(numberOfParticles);
-
-    double expectedEnergy     =  2.5249914e+00;
-
-    expectedForces[0]         = Vec3(  2.1169631e+02,  -1.0710925e-02,  -4.3728025e+00);
-    expectedForces[1]         = Vec3( -2.2585621e+00,   4.8409995e-01,  -2.0188344e-01);
-    expectedForces[2]         = Vec3( -2.2551351e+00,  -4.8124855e-01,  -2.0246986e-01);
-    expectedForces[3]         = Vec3( -1.7178028e+00,  -9.0851787e-04,   4.2466975e-01);
-    expectedForces[4]         = Vec3( -4.8302147e+01,   9.6603376e-04,  -5.7972068e-01);
-    expectedForces[5]         = Vec3(  1.8100634e+00,  -3.5214093e-01,  -1.9357207e-01);
-    expectedForces[6]         = Vec3( -1.6078365e+02,   7.2117601e-03,   5.3180261e+00);
-    expectedForces[7]         = Vec3(  1.8109211e+00,   3.5273117e-01,  -1.9224723e-01);
-
-    double tolerance          = 1.0e-04;
-    compareForcesEnergy(testName, expectedEnergy, energy, expectedForces, forces, tolerance);
-}
-
-void testVdwAmmoniaCubicMeanHarmonic() {
-
-    std::string testName      = "testVdwAmmoniaCubicMeanHarmonic";
-
-    int numberOfParticles     = 8;
-    double boxDimension       = -1.0;
-    double cutoff             = 9000000.0;
-    std::vector<Vec3> forces;
-    double energy;
-    setupAndGetForcesEnergyVdwAmmonia("CUBIC-MEAN", "HARMONIC", cutoff, boxDimension, forces, energy);
-    std::vector<Vec3> expectedForces(numberOfParticles);
-
-    double expectedEnergy     =  4.1369069e+00;
-
-    expectedForces[0]         = Vec3(  2.5854436e+02,  -1.2779529e-02,  -5.9041148e+00);
-    expectedForces[1]         = Vec3( -2.0832419e+00,   4.4915831e-01,  -1.8266000e-01);
-    expectedForces[2]         = Vec3( -2.0823991e+00,  -4.4699804e-01,  -1.8347141e-01);
-    expectedForces[3]         = Vec3( -9.5914714e-01,  -5.2162026e-04,   2.3873165e-01);
-    expectedForces[4]         = Vec3( -5.3724787e+01,   1.4838241e-03,  -2.8089191e-01);
-    expectedForces[5]         = Vec3(  1.5074325e+00,  -2.9016397e-01,  -1.6385118e-01);
-    expectedForces[6]         = Vec3( -2.0271029e+02,   9.2367947e-03,   6.6389988e+00);
-    expectedForces[7]         = Vec3(  1.5080748e+00,   2.9058422e-01,  -1.6274118e-01);
-
-    double tolerance          = 1.0e-04;
-    compareForcesEnergy(testName, expectedEnergy, energy, expectedForces, forces, tolerance);
-}
-
-// test w/ cutoff=0.25 nm; single ixn between two particles (0 and 6); force nonzero on
-// particle 4 due to reduction applied to NH
-// the distance between 0 and 6 is ~ 0.235 so the ixn is in the tapered region
-
 void testVdwTaper() {
 
     std::string testName      = "testVdwTaper";
@@ -468,7 +369,7 @@ void testVdwTaper() {
 
     std::vector<Vec3> forces;
     double energy;
-    setupAndGetForcesEnergyVdwAmmonia("CUBIC-MEAN", "HHG", cutoff, boxDimension, forces, energy);
+    setupAndGetForcesEnergyVdwAmmonia(cutoff, boxDimension, forces, energy);
     std::vector<Vec3> expectedForces(numberOfParticles);
 
     double expectedEnergy     =  3.5478444e+00;
@@ -498,7 +399,7 @@ void testVdwPBC() {
 
     std::vector<Vec3> forces;
     double energy;
-    setupAndGetForcesEnergyVdwAmmonia("CUBIC-MEAN", "HHG", cutoff, boxDimension, forces, energy);
+    setupAndGetForcesEnergyVdwAmmonia(cutoff, boxDimension, forces, energy);
     std::vector<Vec3> expectedForces(numberOfParticles);
 
     double expectedEnergy     =  1.4949141e+01;
@@ -521,7 +422,7 @@ void testVdwPBC() {
 
 // create box of 216 water molecules
 
-void setupAndGetForcesEnergyVdwWater(const std::string& sigmaCombiningRule, const std::string& epsilonCombiningRule, double cutoff,
+void setupAndGetForcesEnergyVdwWater(double cutoff,
                                      double boxDimension, int includeVdwDispersionCorrection,
                                      std::vector<Vec3>& forces, double& energy) {
 
@@ -530,8 +431,6 @@ void setupAndGetForcesEnergyVdwWater(const std::string& sigmaCombiningRule, cons
     System system;
     MMFFVdwForce* mmffVdwForce        = new MMFFVdwForce();;
     int numberOfParticles                 = 648;
-    mmffVdwForce->setSigmaCombiningRule(sigmaCombiningRule);
-    mmffVdwForce->setEpsilonCombiningRule(epsilonCombiningRule);
     mmffVdwForce->setCutoff(cutoff);
     if (boxDimension > 0.0) {
         Vec3 a(boxDimension, 0.0, 0.0);
@@ -551,13 +450,13 @@ void setupAndGetForcesEnergyVdwWater(const std::string& sigmaCombiningRule, cons
     for (unsigned int ii = 0; ii < numberOfParticles; ii += 3) {
 
        system.addParticle(  1.5995000e+01);
-       mmffVdwForce->addParticle(ii, 1.7025000e-01,   4.6024000e-01,   0.0000000e+00);
+       mmffVdwForce->addParticle(1.7025000e-01,   4.6024000e-01,   0.0000000e+00,   'A');
 
        system.addParticle(  1.0080000e+00);
-       mmffVdwForce->addParticle(ii, 1.3275000e-01,   5.6484000e-02,   9.1000000e-01);
+       mmffVdwForce->addParticle(1.3275000e-01,   5.6484000e-02,   9.1000000e-01,   'D');
 
        system.addParticle(  1.0080000e+00);
-       mmffVdwForce->addParticle(ii, 1.3275000e-01,   5.6484000e-02,   9.1000000e-01);
+       mmffVdwForce->addParticle(1.3275000e-01,   5.6484000e-02,   9.1000000e-01,   'D');
    }
 
     // exclusions
@@ -1258,7 +1157,7 @@ void testVdwWater(int includeVdwDispersionCorrection) {
 
     std::vector<Vec3> forces;
     double energy;
-    setupAndGetForcesEnergyVdwWater("CUBIC-MEAN", "HHG", cutoff, boxDimension, includeVdwDispersionCorrection, forces, energy);
+    setupAndGetForcesEnergyVdwWater(cutoff, boxDimension, includeVdwDispersionCorrection, forces, energy);
     std::vector<Vec3> expectedForces(numberOfParticles);
 
     // initialize expected energy and forces
@@ -1929,27 +1828,11 @@ void testVdwWater(int includeVdwDispersionCorrection) {
 
     if (includeVdwDispersionCorrection) {
 
-         std::vector<std::string> sigmaRules;
-         std::vector<std::string> epsilonRules;
-         std::vector<double> expectedEnergies;
+         double expectedEnergy = 6.2137988e+03;
 
-         sigmaRules.push_back("ARITHMETIC");
-         epsilonRules.push_back("ARITHMETIC");
-         expectedEnergies.push_back(6.2137988e+03);
-
-         sigmaRules.push_back("GEOMETRIC");
-         epsilonRules.push_back("GEOMETRIC");
-         expectedEnergies.push_back( 3.6358216e+03);
-
-         sigmaRules.push_back("CUBIC-MEAN");
-         epsilonRules.push_back("HARMONIC");
-         expectedEnergies.push_back(3.2774624e+03);
-
-         for (unsigned int ii = 0; ii < sigmaRules.size(); ii++) {
-             setupAndGetForcesEnergyVdwWater(sigmaRules[ii], epsilonRules[ii], cutoff, boxDimension, includeVdwDispersionCorrection, forces, energy);
-             testName    = "testVdwWaterWithDispersionCorrection_" + sigmaRules[ii] + '_' + epsilonRules[ii];
-             ASSERT_EQUAL_TOL_MOD(expectedEnergies[ii], energy, tolerance, testName);
-         }
+         setupAndGetForcesEnergyVdwWater(cutoff, boxDimension, includeVdwDispersionCorrection, forces, energy);
+         testName    = "testVdwWaterWithDispersionCorrection";
+         ASSERT_EQUAL_TOL_MOD(expectedEnergy, energy, tolerance, testName);
  
     }
 }
@@ -1965,8 +1848,8 @@ void testTriclinic() {
     LangevinIntegrator integrator(0.0, 0.1, 0.01);
     MMFFVdwForce* vdw = new MMFFVdwForce();
     vdw->setUseDispersionCorrection(false);
-    vdw->addParticle(0, 0.5, 1.0, 0.0);
-    vdw->addParticle(1, 0.5, 1.0, 0.0);
+    vdw->addParticle(0.5, 1.0, 0.0, '-');
+    vdw->addParticle(0.5, 1.0, 0.0, '-');
     vdw->setNonbondedMethod(MMFFVdwForce::CutoffPeriodic);
     const double cutoff = 1.5;
     vdw->setCutoff(cutoff);
@@ -2019,23 +1902,9 @@ int main(int argc, char* argv[]) {
 
         testVdw();
 
-        // tests using two ammonia molecules
+        // test using two ammonia molecules
 
-        // test VDW w/ sigmaRule=CubicMean and epsilonRule=HHG
-
-        testVdwAmmoniaCubicMeanHhg();
-
-        // test VDW w/ sigmaRule=Arithmetic and epsilonRule=Arithmetic
-
-        testVdwAmmoniaArithmeticArithmetic();
-
-        // test VDW w/ sigmaRule=Geometric and epsilonRule=Geometric
-
-        testVdwAmmoniaGeometricGeometric();
-
-        // test VDW w/ sigmaRule=CubicMean and epsilonRule=Harmonic
-
-        testVdwAmmoniaCubicMeanHarmonic();
+        testVdwAmmonia();
 
         // test w/ cutoff=0.25 nm; single ixn between two particles (0 and 6); force nonzero on
         // particle 4 due to reduction applied to NH

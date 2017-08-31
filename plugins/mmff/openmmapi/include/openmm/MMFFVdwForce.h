@@ -86,66 +86,35 @@ public:
      * Set the force field parameters for a vdw particle.
      *
      * @param particleIndex   the particle index
-     * @param parentIndex     the index of the parent particle
      * @param sigma           vdw sigma
-     * @param epsilon         vdw epsilon
-     * @param reductionFactor the fraction of the distance along the line from the parent particle to this particle
-     *                        at which the interaction site should be placed
+     * @param G_t_alpha       vdw G*alpha
+     * @param alpha_d_N       vdw alpha/N
+     * @param vdwDA           vdw DA status ('-', 'D', 'A')
      */
-    void setParticleParameters(int particleIndex, int parentIndex, double sigma, double epsilon, double reductionFactor);
+    void setParticleParameters(int particleIndex, double sigma, double G_t_alpha, double alpha_d_N, char vdwDA);
 
     /**
      * Get the force field parameters for a vdw particle.
      *
      * @param particleIndex        the particle index
-     * @param[out] parentIndex     the index of the parent particle
      * @param[out] sigma           vdw sigma
-     * @param[out] epsilon         vdw epsilon
-     * @param[out] reductionFactor the fraction of the distance along the line from the parent particle to this particle
-     *                             at which the interaction site should be placed
+     * @param[out] G_t_alpha       vdw G*alpha
+     * @param[out] alpha_d_N       vdw alpha/N
+     * @param[out] vdwDA           vdw DA status ('-', 'D', 'A')
      */
-    void getParticleParameters(int particleIndex, int& parentIndex, double& sigma, double& epsilon, double& reductionFactor) const;
+    void getParticleParameters(int particleIndex, double& sigma, double& G_t_alpha, double& alpha_d_N, char& vdwDA) const;
 
 
     /**
      * Add the force field parameters for a vdw particle.
      *
-     * @param parentIndex     the index of the parent particle
      * @param sigma           vdw sigma
-     * @param epsilon         vdw epsilon
-     * @param reductionFactor the fraction of the distance along the line from the parent particle to this particle
-     *                        at which the interaction site should be placed
+     * @param G_t_alpha       vdw G*alpha
+     * @param alpha_d_N       vdw alpha/N
+     * @param vdwDA           vdw DA status ('-', 'D', 'A')
      * @return index of added particle
      */
-    int addParticle(int parentIndex, double sigma, double epsilon, double reductionFactor);
-
-    /**
-     * Set sigma combining rule
-     *
-     * @param sigmaCombiningRule   sigma combining rule:  'ARITHMETIC', 'GEOMETRIC', 'CUBIC-MEAN', 'MMFF'
-     */
-    void setSigmaCombiningRule(const std::string& sigmaCombiningRule);
-
-    /**
-     * Get sigma combining rule
-     *
-     * @return sigmaCombiningRule   sigma combining rule:  'ARITHMETIC', 'GEOMETRIC'. 'CUBIC-MEAN'
-     */
-    const std::string& getSigmaCombiningRule(void) const;
-
-    /**
-     * Set epsilon combining rule
-     *
-     * @param epsilonCombiningRule   epsilon combining rule:   'ARITHMETIC', 'GEOMETRIC'. 'HARMONIC', 'HHG'
-     */
-    void setEpsilonCombiningRule(const std::string& epsilonCombiningRule);
-
-    /**
-     * Get epsilon combining rule
-     *
-     * @return epsilonCombiningRule   epsilon combining rule:  'ARITHMETIC', 'GEOMETRIC'. 'HARMONIC', 'HHG'
-     */
-    const std::string& getEpsilonCombiningRule(void) const;
+    int addParticle(double sigma, double G_t_alpha, double alpha_d_N, char vdwDA);
 
     /**
      * Get whether to add a contribution to the energy that approximately represents the effect of VdW
@@ -251,12 +220,8 @@ private:
     double cutoff;
     bool useDispersionCorrection;
 
-    std::string sigmaCombiningRule;
-    std::string epsilonCombiningRule;
-
     std::vector< std::vector<int> > exclusions;
     std::vector<VdwInfo> parameters;
-    std::vector< std::vector< std::vector<double> > > sigEpsTable;
 };
 
 /**
@@ -265,16 +230,16 @@ private:
  */
 class MMFFVdwForce::VdwInfo {
 public:
-    int parentIndex;
-    double reductionFactor, sigma, epsilon, cutoff;
+    double sigma, G_t_alpha, alpha_d_N;
+    char vdwDA;
     VdwInfo() {
-        parentIndex = -1;
-        reductionFactor      = 0.0;
-        sigma                = 1.0;
-        epsilon              = 0.0;
+        sigma       = 1.0;
+        G_t_alpha   = 0.0;
+        alpha_d_N   = 1.0;
+        vdwDA       = '-';
     }
-    VdwInfo(int parentIndex, double sigma, double epsilon, double reductionFactor) :
-        parentIndex(parentIndex), reductionFactor(reductionFactor), sigma(sigma), epsilon(epsilon)  {
+    VdwInfo(double sigma, double G_t_alpha, double alpha_d_N, char vdwDA) :
+        sigma(sigma), G_t_alpha(G_t_alpha), alpha_d_N(alpha_d_N), vdwDA(vdwDA) {
     }
 };
 

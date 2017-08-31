@@ -2319,64 +2319,48 @@ public:
     ForceInfo(const MMFFVdwForce& force) : force(force) {
     }
     bool areParticlesIdentical(int particle1, int particle2) {
-        int iv1, iv2;
-        double sigma1, sigma2, epsilon1, epsilon2, reduction1, reduction2;
-        force.getParticleParameters(particle1, iv1, sigma1, epsilon1, reduction1);
-        force.getParticleParameters(particle2, iv2, sigma2, epsilon2, reduction2);
-        return (sigma1 == sigma2 && epsilon1 == epsilon2 && reduction1 == reduction2);
+        double sigma1, sigma2, G_t_alpha1, G_t_alpha2, alpha_d_N1, alpha_d_N2;
+        char vdwDA1, vdwDA2;
+        force.getParticleParameters(particle1, sigma1, G_t_alpha1, alpha_d_N1, vdwDA1);
+        force.getParticleParameters(particle2, sigma2, G_t_alpha2, alpha_d_N2, vdwDA2);
+        return (sigma1 == sigma2 && G_t_alpha1 == G_t_alpha2 && alpha_d_N1 == alpha_d_N2 && vdwDA1 == vdwDA2);
     }
 private:
     const MMFFVdwForce& force;
 };
 
 CudaCalcMMFFVdwForceKernel::CudaCalcMMFFVdwForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) :
-        CalcMMFFVdwForceKernel(name, platform), cu(cu), system(system), hasInitializedNonbonded(false), sigmaEpsilon(NULL),
-        bondReductionAtoms(NULL), bondReductionFactors(NULL), tempPosq(NULL), tempForces(NULL), nonbonded(NULL) {
+        CalcMMFFVdwForceKernel(name, platform), cu(cu), system(system), hasInitializedNonbonded(false), params(NULL), nonbonded(NULL) {
 }
 
 CudaCalcMMFFVdwForceKernel::~CudaCalcMMFFVdwForceKernel() {
     cu.setAsCurrent();
-    if (sigmaEpsilon != NULL)
-        delete sigmaEpsilon;
-    if (bondReductionAtoms != NULL)
-        delete bondReductionAtoms;
-    if (bondReductionFactors != NULL)
-        delete bondReductionFactors;
-    if (tempPosq != NULL)
-        delete tempPosq;
-    if (tempForces != NULL)
-        delete tempForces;
+    if (params != NULL)
+        delete params;
     if (nonbonded != NULL)
         delete nonbonded;
 }
 
 void CudaCalcMMFFVdwForceKernel::initialize(const System& system, const MMFFVdwForce& force) {
     cu.setAsCurrent();
-    sigmaEpsilon = CudaArray::create<float2>(cu, cu.getPaddedNumAtoms(), "sigmaEpsilon");
-    bondReductionAtoms = CudaArray::create<int>(cu, cu.getPaddedNumAtoms(), "bondReductionAtoms");
-    bondReductionFactors = CudaArray::create<float>(cu, cu.getPaddedNumAtoms(), "bondReductionFactors");
-    tempPosq = new CudaArray(cu, cu.getPaddedNumAtoms(), cu.getUseDoublePrecision() ? sizeof(double4) : sizeof(float4), "tempPosq");
-    tempForces = CudaArray::create<long long>(cu, 3*cu.getPaddedNumAtoms(), "tempForces");
+    params = CudaArray::create<float3>(cu, cu.getPaddedNumAtoms(), "params");
     
     // Record atom parameters.
     
-    vector<float2> sigmaEpsilonVec(cu.getPaddedNumAtoms(), make_float2(0, 1));
-    vector<int> bondReductionAtomsVec(cu.getPaddedNumAtoms(), 0);
-    vector<float> bondReductionFactorsVec(cu.getPaddedNumAtoms(), 0);
+    vector<float3> paramsVec(cu.getPaddedNumAtoms());
     vector<vector<int> > exclusions(cu.getNumAtoms());
     for (int i = 0; i < force.getNumParticles(); i++) {
-        int ivIndex;
-        double sigma, epsilon, reductionFactor;
-        force.getParticleParameters(i, ivIndex, sigma, epsilon, reductionFactor);
-        sigmaEpsilonVec[i] = make_float2((float) sigma, (float) epsilon);
-        bondReductionAtomsVec[i] = ivIndex;
-        bondReductionFactorsVec[i] = (float) reductionFactor;
+        double sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        // if vdwDA == 'D', G_t_alpha is negative
+        // if vdwDA == 'A', alpha_d_N is negative
+        paramsVec[i] = make_float3((float) sigma, (float) (vdwDA == 'D' ? -G_t_alpha : G_t_alpha),
+            (float) (vdwDA == 'A' ? -alpha_d_N : alpha_d_N));
         force.getParticleExclusions(i, exclusions[i]);
         exclusions[i].push_back(i);
     }
-    sigmaEpsilon->upload(sigmaEpsilonVec);
-    bondReductionAtoms->upload(bondReductionAtomsVec);
-    bondReductionFactors->upload(bondReductionFactorsVec);
+    params->upload(paramsVec);
     if (force.getUseDispersionCorrection())
         dispersionCoefficient = MMFFVdwForceImpl::calcDispersionCorrection(system, force);
     else
@@ -2387,36 +2371,11 @@ void CudaCalcMMFFVdwForceKernel::initialize(const System& system, const MMFFVdwF
     // this force, so it will have its own neighbor list and interaction kernel.
     
     nonbonded = new CudaNonbondedUtilities(cu);
-    nonbonded->addParameter(CudaNonbondedUtilities::ParameterInfo("sigmaEpsilon", "float", 2, sizeof(float2), sigmaEpsilon->getDevicePointer()));
-    nonbonded->addParameter(CudaNonbondedUtilities::ParameterInfo("bondReductionFactors", "float", 1, sizeof(float), bondReductionFactors->getDevicePointer()));
+    nonbonded->addParameter(CudaNonbondedUtilities::ParameterInfo("params", "float", 3, sizeof(float3), params->getDevicePointer()));
     
     // Create the interaction kernel.
     
     map<string, string> replacements;
-    string sigmaCombiningRule = force.getSigmaCombiningRule();
-    if (sigmaCombiningRule == "ARITHMETIC")
-        replacements["SIGMA_COMBINING_RULE"] = "1";
-    else if (sigmaCombiningRule == "GEOMETRIC")
-        replacements["SIGMA_COMBINING_RULE"] = "2";
-    else if (sigmaCombiningRule == "CUBIC-MEAN")
-        replacements["SIGMA_COMBINING_RULE"] = "3";
-    else if (sigmaCombiningRule == "MMFF")
-        replacements["SIGMA_COMBINING_RULE"] = "4";
-    else
-        throw OpenMMException("Illegal combining rule for sigma: "+sigmaCombiningRule);
-    string epsilonCombiningRule = force.getEpsilonCombiningRule();
-    if (epsilonCombiningRule == "ARITHMETIC")
-        replacements["EPSILON_COMBINING_RULE"] = "1";
-    else if (epsilonCombiningRule == "GEOMETRIC")
-        replacements["EPSILON_COMBINING_RULE"] = "2";
-    else if (epsilonCombiningRule == "HARMONIC")
-        replacements["EPSILON_COMBINING_RULE"] = "3";
-    else if (epsilonCombiningRule == "HHG")
-        replacements["EPSILON_COMBINING_RULE"] = "4";
-    else if (epsilonCombiningRule == "MMFF")
-        replacements["EPSILON_COMBINING_RULE"] = "5";
-    else
-        throw OpenMMException("Illegal combining rule for sigma: "+sigmaCombiningRule);
     double cutoff = force.getCutoffDistance();
     double taperCutoff = cutoff*0.9;
     replacements["CUTOFF_DISTANCE"] = cu.doubleToString(force.getCutoffDistance());
@@ -2426,15 +2385,8 @@ void CudaCalcMMFFVdwForceKernel::initialize(const System& system, const MMFFVdwF
     replacements["TAPER_C5"] = cu.doubleToString(6/pow(taperCutoff-cutoff, 5.0));
     bool useCutoff = (force.getNonbondedMethod() != MMFFVdwForce::NoCutoff);
     nonbonded->addInteraction(useCutoff, useCutoff, true, force.getCutoffDistance(), exclusions,
-        cu.replaceStrings(CudaMMFFKernelSources::mmffVdwForce2, replacements), 0);
+        cu.replaceStrings(CudaMMFFKernelSources::mmffVdwForce, replacements), 0);
     
-    // Create the other kernels.
-    
-    map<string, string> defines;
-    defines["PADDED_NUM_ATOMS"] = cu.intToString(cu.getPaddedNumAtoms());
-    CUmodule module = cu.createModule(CudaMMFFKernelSources::mmffVdwForce1, defines);
-    prepareKernel = cu.getKernel(module, "prepareToComputeForce");
-    spreadKernel = cu.getKernel(module, "spreadForces");
     cu.addForce(new ForceInfo(force));
 }
 
@@ -2443,17 +2395,8 @@ double CudaCalcMMFFVdwForceKernel::execute(ContextImpl& context, bool includeFor
         hasInitializedNonbonded = true;
         nonbonded->initialize(system);
     }
-    cu.getPosq().copyTo(*tempPosq);
-    cu.getForce().copyTo(*tempForces);
-    void* prepareArgs[] = {&cu.getForce().getDevicePointer(), &cu.getPosq().getDevicePointer(), &tempPosq->getDevicePointer(),
-        &bondReductionAtoms->getDevicePointer(), &bondReductionFactors->getDevicePointer()};
-    cu.executeKernel(prepareKernel, prepareArgs, cu.getPaddedNumAtoms());
     nonbonded->prepareInteractions(1);
     nonbonded->computeInteractions(1, includeForces, includeEnergy);
-    void* spreadArgs[] = {&cu.getForce().getDevicePointer(), &tempForces->getDevicePointer(), &bondReductionAtoms->getDevicePointer(), &bondReductionFactors->getDevicePointer()};
-    cu.executeKernel(spreadKernel, spreadArgs, cu.getPaddedNumAtoms());
-    tempPosq->copyTo(cu.getPosq());
-    tempForces->copyTo(cu.getForce());
     double4 box = cu.getPeriodicBoxSize();
     return dispersionCoefficient/(box.x*box.y*box.z);
 }
@@ -2467,20 +2410,17 @@ void CudaCalcMMFFVdwForceKernel::copyParametersToContext(ContextImpl& context, c
     
     // Record the per-particle parameters.
     
-    vector<float2> sigmaEpsilonVec(cu.getPaddedNumAtoms(), make_float2(0, 1));
-    vector<int> bondReductionAtomsVec(cu.getPaddedNumAtoms(), 0);
-    vector<float> bondReductionFactorsVec(cu.getPaddedNumAtoms(), 0);
+    vector<float3> paramsVec(cu.getPaddedNumAtoms());
     for (int i = 0; i < force.getNumParticles(); i++) {
-        int ivIndex;
-        double sigma, epsilon, reductionFactor;
-        force.getParticleParameters(i, ivIndex, sigma, epsilon, reductionFactor);
-        sigmaEpsilonVec[i] = make_float2((float) sigma, (float) epsilon);
-        bondReductionAtomsVec[i] = ivIndex;
-        bondReductionFactorsVec[i] = (float) reductionFactor;
+        double sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        // if vdwDA == 'D', G_t_alpha is negative
+        // if vdwDA == 'A', alpha_d_N is negative
+        paramsVec[i] = make_float3((float) sigma, (float) (vdwDA == 'D' ? -G_t_alpha : G_t_alpha),
+            (float) (vdwDA == 'A' ? -alpha_d_N : alpha_d_N));
     }
-    sigmaEpsilon->upload(sigmaEpsilonVec);
-    bondReductionAtoms->upload(bondReductionAtomsVec);
-    bondReductionFactors->upload(bondReductionFactorsVec);
+    params->upload(paramsVec);
     if (force.getUseDispersionCorrection())
         dispersionCoefficient = MMFFVdwForceImpl::calcDispersionCorrection(system, force);
     else

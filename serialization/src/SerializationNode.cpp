@@ -147,6 +147,31 @@ SerializationNode& SerializationNode::setBoolProperty(const string& name, bool v
     return *this;
 }
 
+char SerializationNode::getCharProperty(const string& name) const {
+    map<string, string>::const_iterator iter = properties.find(name);
+    if (iter == properties.end())
+        throw OpenMMException("Unknown property '"+name+"' in node '"+getName()+"'");
+    char value;
+    stringstream(iter->second) >> value;
+    return value;
+}
+
+char SerializationNode::getCharProperty(const string& name, char defaultValue) const {
+    map<string, string>::const_iterator iter = properties.find(name);
+    if (iter == properties.end())
+        return defaultValue;
+    char value;
+    stringstream(iter->second) >> value;
+    return value;
+}
+
+SerializationNode& SerializationNode::setCharProperty(const string& name, char value) {
+    stringstream s;
+    s << value;
+    properties[name] = s.str();
+    return *this;
+}
+
 double SerializationNode::getDoubleProperty(const string& name) const {
     map<string, string>::const_iterator iter = properties.find(name);
     if (iter == properties.end())
