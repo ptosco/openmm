@@ -35,7 +35,6 @@
 #include "openmm/internal/MMFFWcaDispersionForceImpl.h"
 #include "openmm/internal/MMFFVdwForceImpl.h"
 #include "openmm/internal/NonbondedForceImpl.h"
-#include "openmm/MMFFConstants.h"
 #include "CudaBondedUtilities.h"
 #include "CudaFFT3D.h"
 #include "CudaForceInfo.h"

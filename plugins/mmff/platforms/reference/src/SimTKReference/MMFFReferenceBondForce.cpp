@@ -24,7 +24,6 @@
 
 #include "MMFFReferenceBondForce.h"
 #include "MMFFReferenceForce.h"
-#include "openmm/MMFFConstants.h"
 
 using std::vector;
 using namespace OpenMM;

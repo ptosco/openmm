@@ -25,7 +25,6 @@
 #include "MMFFReferenceForce.h"
 #include "MMFFReferenceAngleForce.h"
 #include "SimTKOpenMMRealType.h"
-#include "openmm/MMFFConstants.h"
 
 using std::vector;
 using namespace OpenMM;
@@ -76,7 +75,7 @@ double MMFFReferenceAngleForce::getPrefactorsGivenAngleCosine(double cosine,
         if (angle < 0.0)
             angle = ACOS(cosine);
         double deltaIdeal         = angle - idealAngle;
-        double p = MMFF_ANGLE_CUBIC_K*deltaIdeal;
+        double p = angleCubic*deltaIdeal;
         *dEdR                     = energy*deltaIdeal*(1.0 + 1.5*p);
         energy                   *= 0.5*deltaIdeal*deltaIdeal*(1.0 + p);
     }

@@ -39,7 +39,6 @@
 #include "OpenMMMMFF.h"
 #include "openmm/System.h"
 #include "openmm/LangevinIntegrator.h"
-#include "openmm/MMFFConstants.h"
 #include <iostream>
 #include <vector>
 
@@ -135,7 +134,7 @@ static void computeMMFFOutOfPlaneBendForce(int bondIndex,  std::vector<Vec3>& po
     double dt    = angle;
     double dt2   = dt*dt;
  
-    double dEdDt = RADIAN*MMFF_OOP_C1*kAngleQuadratic*dt;
+    double dEdDt = kAngleQuadratic*dt;
  
     double dEdCos;
     dEdCos       = dEdDt/sqrt(cc*bkk2);
@@ -212,7 +211,7 @@ static void computeMMFFOutOfPlaneBendForce(int bondIndex,  std::vector<Vec3>& po
  
     // calculate energy if 'energy' is set
  
-    double energyTerm  = 0.5*MMFF_OOP_C1*kAngleQuadratic*dt2;
+    double energyTerm  = 0.5*kAngleQuadratic*dt2;
     *energy           += energyTerm;
     return;
 }

@@ -33,11 +33,12 @@
 #include "openmm/OpenMMException.h"
 #include "openmm/MMFFAngleForce.h"
 #include "openmm/internal/MMFFAngleForceImpl.h"
-#include "openmm/MMFFConstants.h"
+#include "openmm/Units.h"
 
 using namespace OpenMM;
 
 MMFFAngleForce::MMFFAngleForce() : usePeriodic(false) {
+    static const double MMFF_ANGLE_CUBIC_K = -0.006981317 * DegreesPerRadian;
     _globalCubicK = MMFF_ANGLE_CUBIC_K;
 }
 

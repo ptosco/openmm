@@ -33,11 +33,13 @@
 #include "openmm/OpenMMException.h"
 #include "openmm/MMFFBondForce.h"
 #include "openmm/internal/MMFFBondForceImpl.h"
-#include "openmm/MMFFConstants.h"
+#include "openmm/Units.h"
 
 using namespace OpenMM;
 
 MMFFBondForce::MMFFBondForce() : usePeriodic(false) {
+    static const double MMFF_BOND_CUBIC_K = -2.0 * AngstromsPerNm;
+    static const double MMFF_BOND_QUARTIC_K = 7.0 / 12.0 * MMFF_BOND_CUBIC_K * MMFF_BOND_CUBIC_K;
     _globalCubicK = MMFF_BOND_CUBIC_K;
     _globalQuarticK = MMFF_BOND_QUARTIC_K;
 }

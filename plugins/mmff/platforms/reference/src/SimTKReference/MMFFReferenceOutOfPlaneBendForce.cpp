@@ -25,7 +25,6 @@
 #include "MMFFReferenceForce.h"
 #include "MMFFReferenceOutOfPlaneBendForce.h"
 #include "SimTKOpenMMRealType.h"
-#include "openmm/MMFFConstants.h"
 
 using std::vector;
 using namespace OpenMM;

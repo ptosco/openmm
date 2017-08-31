@@ -28,7 +28,6 @@
 #include "MMFFReferenceTorsionForce.h"
 #include "SimTKOpenMMRealType.h"
 #include "SimTKOpenMMUtilities.h"
-#include "openmm/MMFFConstants.h"
 
 using std::vector;
 using namespace OpenMM;
