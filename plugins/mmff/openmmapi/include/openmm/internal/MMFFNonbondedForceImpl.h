@@ -1,5 +1,5 @@
-#ifndef OPENMM_MMFF_GK_FORCE_FIELD_IMPL_H_
-#define OPENMM_MMFF_GK_FORCE_FIELD_IMPL_H_
+#ifndef OPENMM_NONBONDEDFORCEIMPL_H_
+#define OPENMM_NONBONDEDFORCEIMPL_H_
 
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
@@ -9,7 +9,7 @@
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2008 Stanford University and the Authors.           *
+ * Portions copyright (c) 2008-2010 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -32,22 +32,27 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/ForceImpl.h"
-#include "openmm/MMFFGeneralizedKirkwoodForce.h"
+#include "ForceImpl.h"
+#include "openmm/MMFFNonbondedForce.h"
 #include "openmm/Kernel.h"
+#include <utility>
+#include <set>
 #include <string>
 
 namespace OpenMM {
 
+class System;
+
 /**
- * This is the internal implementation of MMFFGeneralizedKirkwoodForce.
+ * This is the internal implementation of MMFFNonbondedForce.
  */
 
-class MMFFGeneralizedKirkwoodForceImpl : public ForceImpl {
+class OPENMM_EXPORT_MMFF MMFFNonbondedForceImpl : public ForceImpl {
 public:
-    MMFFGeneralizedKirkwoodForceImpl(const MMFFGeneralizedKirkwoodForce& owner);
+    MMFFNonbondedForceImpl(const MMFFNonbondedForce& owner);
+    ~MMFFNonbondedForceImpl();
     void initialize(ContextImpl& context);
-    const MMFFGeneralizedKirkwoodForce& getOwner() const {
+    const MMFFNonbondedForce& getOwner() const {
         return owner;
     }
     void updateContextState(ContextImpl& context, bool& forcesInvalid) {
@@ -58,15 +63,46 @@ public:
         return std::map<std::string, double>(); // This force field doesn't define any parameters.
     }
     std::vector<std::string> getKernelNames();
-    Kernel& getKernel() {
-        return kernel;
-    }
     void updateParametersInContext(ContextImpl& context);
+    void getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const;
+    /**
+     * This is a utility routine that calculates the values to use for alpha and kmax when using
+     * Ewald summation.
+     */
+    static void calcEwaldParameters(const System& system, const MMFFNonbondedForce& force, double& alpha, int& kmaxx, int& kmaxy, int& kmaxz);
+    /**
+     * This is a utility routine that calculates the values to use for alpha and grid size when using
+     * Particle Mesh Ewald.
+     */
+    static void calcPMEParameters(const System& system, const MMFFNonbondedForce& force, double& alpha, int& xsize, int& ysize, int& zsize, bool lj);
+    /**
+     * Compute the coefficient which, when divided by the periodic box volume, gives the
+     * long range dispersion correction to the energy.
+     */
+    static double calcDispersionCorrection(const System& system, const MMFFNonbondedForce& force);
 private:
-    const MMFFGeneralizedKirkwoodForce& owner;
+    struct MMFFVdwParams {
+        double sigma;
+        double G_t_alpha;
+        double alpha_d_N;
+        char vdwDA;
+        bool operator==(const MMFFVdwParams &o)  const {
+            return (sigma == o.sigma && G_t_alpha == o.G_t_alpha && alpha_d_N == o.alpha_d_N && vdwDA == o.vdwDA);
+        }
+        bool operator<(const MMFFVdwParams &o)  const {
+            return (sigma < o.sigma
+                || (sigma == o.sigma && G_t_alpha < o.G_t_alpha)
+                || (sigma == o.sigma && G_t_alpha == o.G_t_alpha && alpha_d_N < o.alpha_d_N)
+                || (sigma == o.sigma && G_t_alpha == o.G_t_alpha && alpha_d_N == o.alpha_d_N && vdwDA < o.vdwDA));
+        }
+    };
+    class ErrorFunction;
+    class EwaldErrorFunction;
+    static int findZero(const ErrorFunction& f, int initialGuess);
+    const MMFFNonbondedForce& owner;
     Kernel kernel;
 };
 
 } // namespace OpenMM
 
-#endif /*OPENMM_MMFF_GBSA_OBC_FORCE_FIELD_IMPL_H_*/
+#endif /*OPENMM_NONBONDEDFORCEIMPL_H_*/

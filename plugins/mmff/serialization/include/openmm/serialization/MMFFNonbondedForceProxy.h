@@ -1,8 +1,8 @@
-#ifndef OPENMM_MMFF_WCA_DISPERSION_FORCE_PROXY_H_
-#define OPENMM_MMFF_WCA_DISPERSION_FORCE_PROXY_H_
+#ifndef OPENMM_MMFF_NONBONDEDFORCE_PROXY_H_
+#define OPENMM_MMFF_NONBONDEDFORCE_PROXY_H_
 
 /* -------------------------------------------------------------------------- *
- *                                OpenMMMMFF                                *
+ *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
  * This is part of the OpenMM molecular simulation toolkit originating from   *
  * Simbios, the NIH National Center for Physics-Based Simulation of           *
@@ -32,22 +32,22 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/windowsExportMMFF.h"
+#include "openmm/internal/windowsExport.h"
 #include "openmm/serialization/SerializationProxy.h"
 
 namespace OpenMM {
 
 /**
- * This is a proxy for serializing MMFFWcaDispersionForce objects.
+ * This is a proxy for serializing NonbondedForce objects.
  */
 
-class OPENMM_EXPORT_MMFF MMFFWcaDispersionForceProxy : public SerializationProxy {
+class OPENMM_EXPORT_MMFF NonbondedForceProxy : public SerializationProxy {
 public:
-    MMFFWcaDispersionForceProxy();
+    NonbondedForceProxy();
     void serialize(const void* object, SerializationNode& node) const;
     void* deserialize(const SerializationNode& node) const;
 };
 
 } // namespace OpenMM
 
-#endif /*OPENMM_MMFF_WCA_DISPERSION_FORCE_PROXY_H_*/
+#endif /*OPENMM_MMFF_NONBONDEDFORCE_PROXY_H_*/

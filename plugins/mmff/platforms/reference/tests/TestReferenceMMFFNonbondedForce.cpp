@@ -1,15 +1,12 @@
-#ifndef OPENMM_MMFF_MULTIPOLE_FORCE_PROXY_H_
-#define OPENMM_MMFF_MULTIPOLE_FORCE_PROXY_H_
-
 /* -------------------------------------------------------------------------- *
- *                                OpenMMMMFF                                *
+ *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
  * This is part of the OpenMM molecular simulation toolkit originating from   *
  * Simbios, the NIH National Center for Physics-Based Simulation of           *
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2010 Stanford University and the Authors.           *
+ * Portions copyright (c) 2015 Stanford University and the Authors.           *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -32,22 +29,8 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/windowsExportMMFF.h"
-#include "openmm/serialization/SerializationProxy.h"
+#include "ReferenceTests.h"
+#include "TestNonbondedForce.h"
 
-namespace OpenMM {
-
-/**
- * This is a proxy for serializing MMFFMultipoleForce objects.
- */
-
-class OPENMM_EXPORT_MMFF MMFFMultipoleForceProxy : public SerializationProxy {
-public:
-    MMFFMultipoleForceProxy();
-    void serialize(const void* object, SerializationNode& node) const;
-    void* deserialize(const SerializationNode& node) const;
-};
-
-} // namespace OpenMM
-
-#endif /*OPENMM_MMFF_MULTIPOLE_FORCE_PROXY_H_*/
+void runPlatformTests() {
+}

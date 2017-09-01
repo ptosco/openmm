@@ -41,7 +41,7 @@ namespace OpenMM {
  * This is a proxy for serializing MMFFTorsionForce objects.
  */
 
-class OPENMM_EXPORT MMFFTorsionForceProxy : public SerializationProxy {
+class OPENMM_EXPORT_MMFF MMFFTorsionForceProxy : public SerializationProxy {
 public:
     MMFFTorsionForceProxy();
     void serialize(const void* object, SerializationNode& node) const;

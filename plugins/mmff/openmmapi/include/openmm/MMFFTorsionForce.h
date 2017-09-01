@@ -47,7 +47,7 @@ namespace OpenMM {
  * This will have no effect on Contexts that already exist unless you call updateParametersInContext().
  */
 
-class OPENMM_EXPORT MMFFTorsionForce : public Force {
+class OPENMM_EXPORT_MMFF MMFFTorsionForce : public Force {
 public:
     /**
      * Create a MMFFTorsionForce.

@@ -84,7 +84,7 @@ double MMFFVdwForceImpl::calcDispersionCorrection(const System& system, const MM
     if (force.getNonbondedMethod() == MMFFVdwForce::NoCutoff)
         return 0.0;
 
-    // Identify all particle classes (defined by sigma and epsilon and reduction), and count the number of
+    // Identify all particle classes (defined by MMFFVdwParams), and count the number of
     // particles in each class.
 
     map<MMFFVdwParams, int> classCounts;
@@ -148,8 +148,8 @@ double MMFFVdwForceImpl::calcDispersionCorrection(const System& system, const MM
     int ndelta = int(double(nstep) * (range - cut));
     double rdelta = (range - cut) / double(ndelta);
     double offset = cut - 0.5 * rdelta;
-    double dhal = 0.07; // This magic number also appears in mmffVdwForce2.cu
-    double ghal = 0.12; // This magic number also appears in mmffVdwForce2.cu
+    double dhal = 0.07; // This magic number also appears in mmffVdwForce.cu
+    double ghal = 0.12; // This magic number also appears in mmffVdwForce.cu
     double elrc = 0.0; // This number is incremented and passed out at the end
     double e = 0.0;
     double sigma, epsilon; // The pairwise sigma and epsilon parameters.
