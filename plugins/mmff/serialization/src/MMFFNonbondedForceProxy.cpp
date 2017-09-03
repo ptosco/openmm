@@ -29,26 +29,24 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/serialization/NonbondedForceProxy.h"
+#include "openmm/serialization/MMFFNonbondedForceProxy.h"
 #include "openmm/serialization/SerializationNode.h"
 #include "openmm/Force.h"
-#include "openmm/NonbondedForce.h"
+#include "openmm/MMFFNonbondedForce.h"
 #include <sstream>
 
 using namespace OpenMM;
 using namespace std;
 
-NonbondedForceProxy::NonbondedForceProxy() : SerializationProxy("NonbondedForce") {
+MMFFNonbondedForceProxy::MMFFNonbondedForceProxy() : SerializationProxy("MMFFNonbondedForce") {
 }
 
-void NonbondedForceProxy::serialize(const void* object, SerializationNode& node) const {
+void MMFFNonbondedForceProxy::serialize(const void* object, SerializationNode& node) const {
     node.setIntProperty("version", 2);
-    const NonbondedForce& force = *reinterpret_cast<const NonbondedForce*>(object);
+    const MMFFNonbondedForce& force = *reinterpret_cast<const MMFFNonbondedForce*>(object);
     node.setIntProperty("forceGroup", force.getForceGroup());
     node.setIntProperty("method", (int) force.getNonbondedMethod());
     node.setDoubleProperty("cutoff", force.getCutoffDistance());
-    node.setBoolProperty("useSwitchingFunction", force.getUseSwitchingFunction());
-    node.setDoubleProperty("switchingDistance", force.getSwitchingDistance());
     node.setDoubleProperty("ewaldTolerance", force.getEwaldErrorTolerance());
     node.setDoubleProperty("rfDielectric", force.getReactionFieldDielectric());
     node.setIntProperty("dispersionCorrection", force.getUseDispersionCorrection());
@@ -59,17 +57,13 @@ void NonbondedForceProxy::serialize(const void* object, SerializationNode& node)
     node.setIntProperty("nx", nx);
     node.setIntProperty("ny", ny);
     node.setIntProperty("nz", nz);
-    force.getLJPMEParameters(alpha, nx, ny, nz);
-    node.setDoubleProperty("ljAlpha", alpha);
-    node.setIntProperty("ljnx", nx);
-    node.setIntProperty("ljny", ny);
-    node.setIntProperty("ljnz", nz);
     node.setIntProperty("recipForceGroup", force.getReciprocalSpaceForceGroup());
     SerializationNode& particles = node.createChildNode("Particles");
     for (int i = 0; i < force.getNumParticles(); i++) {
-        double charge, sigma, epsilon;
-        force.getParticleParameters(i, charge, sigma, epsilon);
-        particles.createChildNode("Particle").setDoubleProperty("q", charge).setDoubleProperty("sig", sigma).setDoubleProperty("eps", epsilon);
+        double charge, sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(i, charge, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        particles.createChildNode("Particle").setDoubleProperty("q", charge).setDoubleProperty("sig", sigma).setDoubleProperty("Gta", G_t_alpha).setDoubleProperty("adN", alpha_d_N).setCharProperty("vdwDA", vdwDA);
     }
     SerializationNode& exceptions = node.createChildNode("Exceptions");
     for (int i = 0; i < force.getNumExceptions(); i++) {
@@ -80,17 +74,15 @@ void NonbondedForceProxy::serialize(const void* object, SerializationNode& node)
     }
 }
 
-void* NonbondedForceProxy::deserialize(const SerializationNode& node) const {
+void* MMFFNonbondedForceProxy::deserialize(const SerializationNode& node) const {
     int version = node.getIntProperty("version");
     if (version < 1 || version > 2)
         throw OpenMMException("Unsupported version number");
-    NonbondedForce* force = new NonbondedForce();
+    MMFFNonbondedForce* force = new MMFFNonbondedForce();
     try {
         force->setForceGroup(node.getIntProperty("forceGroup", 0));
-        force->setNonbondedMethod((NonbondedForce::NonbondedMethod) node.getIntProperty("method"));
+        force->setNonbondedMethod((MMFFNonbondedForce::NonbondedMethod) node.getIntProperty("method"));
         force->setCutoffDistance(node.getDoubleProperty("cutoff"));
-        force->setUseSwitchingFunction(node.getBoolProperty("useSwitchingFunction", false));
-        force->setSwitchingDistance(node.getDoubleProperty("switchingDistance", -1.0));
         force->setEwaldErrorTolerance(node.getDoubleProperty("ewaldTolerance"));
         force->setReactionFieldDielectric(node.getDoubleProperty("rfDielectric"));
         force->setUseDispersionCorrection(node.getIntProperty("dispersionCorrection"));
@@ -99,17 +91,10 @@ void* NonbondedForceProxy::deserialize(const SerializationNode& node) const {
         int ny = node.getIntProperty("ny", 0);
         int nz = node.getIntProperty("nz", 0);
         force->setPMEParameters(alpha, nx, ny, nz);
-        if (version >= 2) {
-            alpha = node.getDoubleProperty("ljAlpha", 0.0);
-            nx = node.getIntProperty("ljnx", 0);
-            ny = node.getIntProperty("ljny", 0);
-            nz = node.getIntProperty("ljnz", 0);
-            force->setLJPMEParameters(alpha, nx, ny, nz);
-        }
         force->setReciprocalSpaceForceGroup(node.getIntProperty("recipForceGroup", -1));
         const SerializationNode& particles = node.getChildNode("Particles");
         for (auto& particle : particles.getChildren())
-            force->addParticle(particle.getDoubleProperty("q"), particle.getDoubleProperty("sig"), particle.getDoubleProperty("eps"));
+            force->addParticle(particle.getDoubleProperty("q"), particle.getDoubleProperty("sig"), particle.getDoubleProperty("Gta"), particle.getDoubleProperty("adN"), particle.getCharProperty("vdwDA"));
         const SerializationNode& exceptions = node.getChildNode("Exceptions");
         for (auto& exception : exceptions.getChildren())
             force->addException(exception.getIntProperty("p1"), exception.getIntProperty("p2"), exception.getDoubleProperty("q"), exception.getDoubleProperty("sig"), exception.getDoubleProperty("eps"));

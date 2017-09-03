@@ -29,7 +29,8 @@
 #include <iostream>
 
 #include "SimTKOpenMMUtilities.h"
-#include "ReferenceLJCoulombIxn.h"
+#include "MMFFReferenceNonbondedForce.h"
+#include "openmm/MMFFNonbondedForce.h"
 #include "ReferenceForce.h"
 #include "ReferencePME.h"
 #include "openmm/OpenMMException.h"
@@ -42,22 +43,38 @@ using std::set;
 using std::vector;
 using namespace OpenMM;
 
+const int MMFFReferenceNonbondedForce::SigIndex = 0;
+const int MMFFReferenceNonbondedForce::GtaIndex = 1;
+const int MMFFReferenceNonbondedForce::adNIndex = 2;
+const int   MMFFReferenceNonbondedForce::QIndex = 3;
+
+// MMFF vdW constants
+
+const double MMFFReferenceNonbondedForce::dhal  = 0.07;
+const double MMFFReferenceNonbondedForce::ghal  = 0.12;
+
+// taper coefficient indices
+
+const int MMFFReferenceNonbondedForce::C3 =       0;
+const int MMFFReferenceNonbondedForce::C4 =       1;
+const int MMFFReferenceNonbondedForce::C5 =       2;
+
 /**---------------------------------------------------------------------------------------
 
-   ReferenceLJCoulombIxn constructor
+   MMFFReferenceNonbondedForce constructor
 
    --------------------------------------------------------------------------------------- */
 
-ReferenceLJCoulombIxn::ReferenceLJCoulombIxn() : cutoff(false), useSwitch(false), periodic(false), ewald(false), pme(false), ljpme(false) {
+MMFFReferenceNonbondedForce::MMFFReferenceNonbondedForce() : cutoff(false), periodic(false), ewald(false), pme(false) {
 }
 
 /**---------------------------------------------------------------------------------------
 
-   ReferenceLJCoulombIxn destructor
+   MMFFReferenceNonbondedForce destructor
 
    --------------------------------------------------------------------------------------- */
 
-ReferenceLJCoulombIxn::~ReferenceLJCoulombIxn() {
+MMFFReferenceNonbondedForce::~MMFFReferenceNonbondedForce() {
 }
 
 /**---------------------------------------------------------------------------------------
@@ -70,26 +87,28 @@ ReferenceLJCoulombIxn::~ReferenceLJCoulombIxn() {
 
      --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::setUseCutoff(double distance, const OpenMM::NeighborList& neighbors, double solventDielectric) {
+void MMFFReferenceNonbondedForce::setTaperCoefficients(double distance) {
+    static const double taperCutoffFactor = 0.9;
+    taperCutoff = distance*taperCutoffFactor;
+    if (taperCutoff != distance) {
+        taperCoefficients[C3] = 10.0/pow(taperCutoff - distance, 3.0);
+        taperCoefficients[C4] = 15.0/pow(taperCutoff - distance, 4.0);
+        taperCoefficients[C5] =  6.0/pow(taperCutoff - distance, 5.0);
+    } else {
+        taperCoefficients[C3] = 0.0;
+        taperCoefficients[C4] = 0.0;
+        taperCoefficients[C5] = 0.0;
+    }
+}
+
+void MMFFReferenceNonbondedForce::setUseCutoff(double distance, const OpenMM::NeighborList& neighbors, double solventDielectric) {
 
     cutoff = true;
     cutoffDistance = distance;
+    setTaperCoefficients(distance);
     neighborList = &neighbors;
     krf = pow(cutoffDistance, -3.0)*(solventDielectric-1.0)/(2.0*solventDielectric+1.0);
     crf = (1.0/cutoffDistance)*(3.0*solventDielectric)/(2.0*solventDielectric+1.0);
-}
-
-/**---------------------------------------------------------------------------------------
-
-   Set the force to use a switching function on the Lennard-Jones interaction.
-
-   @param distance            the switching distance
-
-   --------------------------------------------------------------------------------------- */
-
-void ReferenceLJCoulombIxn::setUseSwitchingFunction(double distance) {
-    useSwitch = true;
-    switchingDistance = distance;
 }
 
 /**---------------------------------------------------------------------------------------
@@ -102,7 +121,7 @@ void ReferenceLJCoulombIxn::setUseSwitchingFunction(double distance) {
 
      --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::setPeriodic(OpenMM::Vec3* vectors) {
+void MMFFReferenceNonbondedForce::setPeriodic(OpenMM::Vec3* vectors) {
 
     assert(cutoff);
     assert(vectors[0][0] >= 2.0*cutoffDistance);
@@ -125,7 +144,7 @@ void ReferenceLJCoulombIxn::setPeriodic(OpenMM::Vec3* vectors) {
 
      --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::setUseEwald(double alpha, int kmaxx, int kmaxy, int kmaxz) {
+void MMFFReferenceNonbondedForce::setUseEwald(double alpha, int kmaxx, int kmaxy, int kmaxz) {
     alphaEwald = alpha;
     numRx = kmaxx;
     numRy = kmaxy;
@@ -142,29 +161,12 @@ void ReferenceLJCoulombIxn::setUseEwald(double alpha, int kmaxx, int kmaxy, int 
 
      --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::setUsePME(double alpha, int meshSize[3]) {
+void MMFFReferenceNonbondedForce::setUsePME(double alpha, int meshSize[3]) {
     alphaEwald = alpha;
     meshDim[0] = meshSize[0];
     meshDim[1] = meshSize[1];
     meshDim[2] = meshSize[2];
     pme = true;
-}
-
-/**---------------------------------------------------------------------------------------
-
-     Set the force to use Particle-Mesh Ewald (PME) summation for dispersion terms.
-
-     @param alpha  the dispersion Ewald separation parameter
-     @param gridSize the dimensions of the dispersion mesh
-
-     --------------------------------------------------------------------------------------- */
-
-void ReferenceLJCoulombIxn::setUseLJPME(double alpha, int meshSize[3]) {
-    alphaDispersionEwald = alpha;
-    dispersionMeshDim[0] = meshSize[0];
-    dispersionMeshDim[1] = meshSize[1];
-    dispersionMeshDim[2] = meshSize[2];
-    ljpme = true;
 }
 
 /**---------------------------------------------------------------------------------------
@@ -185,7 +187,7 @@ void ReferenceLJCoulombIxn::setUseLJPME(double alpha, int meshSize[3]) {
 
    --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& atomCoordinates,
+void MMFFReferenceNonbondedForce::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& atomCoordinates,
                                               double** atomParameters, vector<set<int> >& exclusions,
                                               double* fixedParameters, vector<Vec3>& forces,
                                               double* energyByAtom, double* totalEnergy, bool includeDirect, bool includeReciprocal) const {
@@ -206,12 +208,6 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
     double totalRecipEnergy         = 0.0;
     double vdwEnergy                = 0.0;
 
-    // A couple of sanity checks for
-    if(ljpme && useSwitch)
-        throw OpenMMException("Switching cannot be used with LJPME");
-    if(ljpme && !pme)
-        throw OpenMMException("LJPME has been set, without PME being set");
-
     // **************************************************************************************
     // SELF ENERGY
     // **************************************************************************************
@@ -219,10 +215,7 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
     if (includeReciprocal) {
         for (int atomID = 0; atomID < numberOfAtoms; atomID++) {
             double selfEwaldEnergy       = ONE_4PI_EPS0*atomParameters[atomID][QIndex]*atomParameters[atomID][QIndex] * alphaEwald/SQRT_PI;
-            if(ljpme) {
-                // Dispersion self term
-                selfEwaldEnergy -= pow(alphaDispersionEwald, 6.0) * 64.0*pow(atomParameters[atomID][SigIndex], 6.0) * pow(atomParameters[atomID][EpsIndex], 2.0) / 12.0;
-            }
+
             totalSelfEwaldEnergy            -= selfEwaldEnergy;
             if (energyByAtom) {
                 energyByAtom[atomID]        -= selfEwaldEnergy;
@@ -257,30 +250,6 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
                 energyByAtom[n] += recipEnergy;
 
         pme_destroy(pmedata);
-
-        if (ljpme) {
-            // Dispersion reciprocal space terms
-            pme_init(&pmedata,alphaDispersionEwald,numberOfAtoms,dispersionMeshDim,5,1);
-
-            std::vector<Vec3> dpmeforces;
-            for (int i = 0; i < numberOfAtoms; i++){
-                charges[i] = 8.0*pow(atomParameters[i][SigIndex], 3.0) * atomParameters[i][EpsIndex];
-                dpmeforces.push_back(Vec3());
-            }
-            pme_exec_dpme(pmedata,atomCoordinates,dpmeforces,charges,periodicBoxVectors,&recipDispersionEnergy);
-            for (int i = 0; i < numberOfAtoms; i++){
-                forces[i][0] -= 2.0*dpmeforces[i][0];
-                forces[i][1] -= 2.0*dpmeforces[i][1];
-                forces[i][2] -= 2.0*dpmeforces[i][2];
-            }
-            if (totalEnergy)
-                *totalEnergy += recipDispersionEnergy;
-
-            if (energyByAtom)
-                for (int n = 0; n < numberOfAtoms; n++)
-                    energyByAtom[n] += recipDispersionEnergy;
-            pme_destroy(pmedata);
-        }
     }
     // Ewald method
 
@@ -394,69 +363,60 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
     double totalVdwEnergy            = 0.0f;
     double totalRealSpaceEwaldEnergy = 0.0f;
 
-
     for (auto& pair : *neighborList) {
         int ii = pair.first;
         int jj = pair.second;
 
         double deltaR[2][ReferenceForce::LastDeltaRIndex];
         ReferenceForce::getDeltaRPeriodic(atomCoordinates[jj], atomCoordinates[ii], periodicBoxVectors, deltaR[0]);
-        double r         = deltaR[0][ReferenceForce::RIndex];
+        double r_ij      = deltaR[0][ReferenceForce::RIndex];
         double inverseR  = 1.0/(deltaR[0][ReferenceForce::RIndex]);
-        double switchValue = 1, switchDeriv = 0;
-        if (useSwitch && r > switchingDistance) {
-            double t = (r-switchingDistance)/(cutoffDistance-switchingDistance);
-            switchValue = 1+t*t*t*(-10+t*(15-t*6));
-            switchDeriv = t*t*(-30+t*(60-t*30))/(cutoffDistance-switchingDistance);
-        }
-        double alphaR = alphaEwald * r;
+        double alphaR    = alphaEwald * r_ij;
 
 
         double dEdR = ONE_4PI_EPS0 * atomParameters[ii][QIndex] * atomParameters[jj][QIndex] * inverseR * inverseR * inverseR;
         dEdR = dEdR * (erfc(alphaR) + 2 * alphaR * exp (- alphaR * alphaR) / SQRT_PI);
 
-        double sig = atomParameters[ii][SigIndex] +  atomParameters[jj][SigIndex];
-        double sig2 = inverseR*sig;
-        sig2 *= sig2;
-        double sig6 = sig2*sig2*sig2;
-        double eps = atomParameters[ii][EpsIndex]*atomParameters[jj][EpsIndex];
-        dEdR += switchValue*eps*(12.0*sig6 - 6.0)*sig6*inverseR*inverseR;
-        vdwEnergy = eps*(sig6-1.0)*sig6;
+        bool haveDonor = (atomParameters[ii][GtaIndex] < 0.0 || atomParameters[jj][GtaIndex] < 0.0);
+        bool haveDAPair = (atomParameters[ii][GtaIndex] < 0.0f && atomParameters[jj][adNIndex] < 0.0f)
+            || (atomParameters[ii][adNIndex] < 0.0f && atomParameters[jj][GtaIndex] < 0.0f);
+        double combinedSigma   = MMFFNonbondedForce::sigmaCombiningRule(atomParameters[ii][SigIndex], atomParameters[jj][SigIndex], haveDonor);
+        double combinedEpsilon = MMFFNonbondedForce::epsilonCombiningRule(combinedSigma, fabs(atomParameters[ii][adNIndex]),
+            fabs(atomParameters[jj][adNIndex]), fabs(atomParameters[ii][GtaIndex]), fabs(atomParameters[jj][GtaIndex]));
+        if (haveDAPair)
+            MMFFNonbondedForce::scaleSigmaEpsilon(combinedSigma, combinedEpsilon);
+        double r_ij_2       = deltaR[0][ReferenceForce::R2Index];
+        double sigma_7      = combinedSigma*combinedSigma*combinedSigma;
+               sigma_7      = sigma_7*sigma_7*combinedSigma;
 
-        if (ljpme) {
-            double dalphaR   = alphaDispersionEwald * r;
-            double dar2 = dalphaR*dalphaR;
-            double dar4 = dar2*dar2;
-            double dar6 = dar4*dar2;
-            double inverseR2 = inverseR*inverseR;
-            double c6i = 8.0*pow(atomParameters[ii][SigIndex], 3.0) * atomParameters[ii][EpsIndex];
-            double c6j = 8.0*pow(atomParameters[jj][SigIndex], 3.0) * atomParameters[jj][EpsIndex];
-            // For the energies and forces, we first add the regular Lorentz−Berthelot terms.  The C12 term is treated as usual
-            // but we then subtract out (remembering that the C6 term is negative) the multiplicative C6 term that has been
-            // computed in real space.  Finally, we add a potential shift term to account for the difference between the LB
-            // and multiplicative functional forms at the cutoff.
-            double emult = c6i*c6j*inverseR2*inverseR2*inverseR2*(1.0 - EXP(-dar2) * (1.0 + dar2 + 0.5*dar4));
-            dEdR += 6.0*c6i*c6j*inverseR2*inverseR2*inverseR2*inverseR2*(1.0 - EXP(-dar2) * (1.0 + dar2 + 0.5*dar4 + dar6/6.0));
+        double r_ij_6       = r_ij_2*r_ij_2*r_ij_2;
+        double r_ij_7       = r_ij_6*r_ij;
 
-            double inverseCut2 = 1.0/(cutoffDistance*cutoffDistance);
-            double inverseCut6 = inverseCut2*inverseCut2*inverseCut2;
-            sig2 = atomParameters[ii][SigIndex] +  atomParameters[jj][SigIndex];
-            sig2 *= sig2;
-            sig6 = sig2*sig2*sig2;
-            // The additive part of the potential shift
-            double potentialshift = eps*(1.0-sig6*inverseCut6)*sig6*inverseCut6;
-            dalphaR   = alphaDispersionEwald * cutoffDistance;
-            dar2 = dalphaR*dalphaR;
-            dar4 = dar2*dar2;
-            // The multiplicative part of the potential shift
-            potentialshift -= c6i*c6j*inverseCut6*(1.0 - EXP(-dar2) * (1.0 + dar2 + 0.5*dar4));
-            vdwEnergy += emult + potentialshift;
+        double rho          = r_ij_7 + ghal*sigma_7;
+
+        double tau          = (dhal + 1.0)/(r_ij + dhal*combinedSigma);
+        double tau_7        = tau*tau*tau;
+               tau_7        = tau_7*tau_7*tau;
+
+        double dtau         = tau/(dhal + 1.0);
+
+        double ratio        = (sigma_7/rho);
+        double gtau         = combinedEpsilon*tau_7*r_ij_6*(ghal+1.0)*ratio*ratio;
+
+        vdwEnergy           = combinedEpsilon*tau_7*sigma_7*((ghal+1.0)*sigma_7/rho - 2.0);
+        double vdw_dEdR     = -7.0*(dtau*vdwEnergy + gtau);
+
+        // tapering
+
+        if (cutoff && r_ij > taperCutoff) {
+            double delta    = r_ij - taperCutoff;
+            double taper    = 1.0 + delta*delta*delta*(taperCoefficients[C3] + delta*(taperCoefficients[C4] + delta*taperCoefficients[C5]));
+            double dtaper   = delta*delta*(3.0*taperCoefficients[C3] + delta*(4.0*taperCoefficients[C4] + delta*5.0*taperCoefficients[C5]));
+            vdw_dEdR        = vdwEnergy*dtaper + vdw_dEdR*taper;
+            vdwEnergy      *= taper;
         }
 
-        if (useSwitch) {
-            dEdR -= vdwEnergy*switchDeriv*inverseR;
-            vdwEnergy *= switchValue;
-        }
+        dEdR += vdw_dEdR*inverseR;
 
         // accumulate forces
 
@@ -518,24 +478,6 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
                     realSpaceEwaldEnergy = alphaEwald*TWO_OVER_SQRT_PI*ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex];
                 }
 
-                if(ljpme){
-                    // Dispersion terms.  Here we just back out the reciprocal space terms, and don't add any extra real space terms.
-                    double dalphaR   = alphaDispersionEwald * r;
-                    double inverseR2 = inverseR*inverseR;
-                    double dar2 = dalphaR*dalphaR;
-                    double dar4 = dar2*dar2;
-                    double dar6 = dar4*dar2;
-                    double c6i = 8.0*pow(atomParameters[ii][SigIndex], 3.0) * atomParameters[ii][EpsIndex];
-                    double c6j = 8.0*pow(atomParameters[jj][SigIndex], 3.0) * atomParameters[jj][EpsIndex];
-                    realSpaceEwaldEnergy -= c6i*c6j*inverseR2*inverseR2*inverseR2*(1.0 - EXP(-dar2) * (1.0 + dar2 + 0.5*dar4));
-                    double dEdR = -6.0*c6i*c6j*inverseR2*inverseR2*inverseR2*inverseR2*(1.0 - EXP(-dar2) * (1.0 + dar2 + 0.5*dar4 + dar6/6.0));
-                    for (int kk = 0; kk < 3; kk++) {
-                        double force = dEdR*deltaR[0][kk];
-                        forces[ii][kk] -= force;
-                        forces[jj][kk] += force;
-                    }
-                }
-
                 totalExclusionEnergy += realSpaceEwaldEnergy;
                 if (energyByAtom) {
                     energyByAtom[ii] -= realSpaceEwaldEnergy;
@@ -551,7 +493,7 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
 
 /**---------------------------------------------------------------------------------------
 
-   Calculate LJ Coulomb pair ixn
+   Calculate vdW Coulomb pair ixn
 
    @param numberOfAtoms    number of atoms
    @param atomCoordinates  atom coordinates
@@ -567,12 +509,12 @@ void ReferenceLJCoulombIxn::calculateEwaldIxn(int numberOfAtoms, vector<Vec3>& a
 
    --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::calculatePairIxn(int numberOfAtoms, vector<Vec3>& atomCoordinates,
+void MMFFReferenceNonbondedForce::calculatePairIxn(int numberOfAtoms, vector<Vec3>& atomCoordinates,
                                              double** atomParameters, vector<set<int> >& exclusions,
                                              double* fixedParameters, vector<Vec3>& forces,
                                              double* energyByAtom, double* totalEnergy, bool includeDirect, bool includeReciprocal) const {
 
-    if (ewald || pme || ljpme) {
+    if (ewald || pme) {
         calculateEwaldIxn(numberOfAtoms, atomCoordinates, atomParameters, exclusions, fixedParameters, forces, energyByAtom,
                           totalEnergy, includeDirect, includeReciprocal);
         return;
@@ -596,19 +538,19 @@ void ReferenceLJCoulombIxn::calculatePairIxn(int numberOfAtoms, vector<Vec3>& at
 
 /**---------------------------------------------------------------------------------------
 
-     Calculate LJ Coulomb pair ixn between two atoms
+     Calculate vdW Coulomb pair ixn between two atoms
 
      @param ii               the index of the first atom
      @param jj               the index of the second atom
      @param atomCoordinates  atom coordinates
-     @param atomParameters   atom parameters (charges, c6, c12, ...)     atomParameters[atomIndex][paramterIndex]
+     @param atomParameters   atom parameters (charges, sigma, ...)     atomParameters[atomIndex][paramterIndex]
      @param forces           force array (forces added)
      @param energyByAtom     atom energy
      @param totalEnergy      total energy
 
      --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulombIxn::calculateOneIxn(int ii, int jj, vector<Vec3>& atomCoordinates,
+void MMFFReferenceNonbondedForce::calculateOneIxn(int ii, int jj, vector<Vec3>& atomCoordinates,
                                             double** atomParameters, vector<Vec3>& forces,
                                             double* energyByAtom, double* totalEnergy) const {
     double deltaR[2][ReferenceForce::LastDeltaRIndex];
@@ -620,38 +562,51 @@ void ReferenceLJCoulombIxn::calculateOneIxn(int ii, int jj, vector<Vec3>& atomCo
     else
         ReferenceForce::getDeltaR(atomCoordinates[jj], atomCoordinates[ii], deltaR[0]);
 
-    double r2        = deltaR[0][ReferenceForce::R2Index];
-    double inverseR  = 1.0/(deltaR[0][ReferenceForce::RIndex]);
-    double switchValue = 1, switchDeriv = 0;
-    if (useSwitch) {
-        double r = deltaR[0][ReferenceForce::RIndex];
-        if (r > switchingDistance) {
-            double t = (r-switchingDistance)/(cutoffDistance-switchingDistance);
-            switchValue = 1+t*t*t*(-10+t*(15-t*6));
-            switchDeriv = t*t*(-30+t*(60-t*30))/(cutoffDistance-switchingDistance);
-        }
-    }
-    double sig = atomParameters[ii][SigIndex] +  atomParameters[jj][SigIndex];
-    double sig2 = inverseR*sig;
-    sig2 *= sig2;
-    double sig6 = sig2*sig2*sig2;
+    bool haveDonor = (atomParameters[ii][GtaIndex] < 0.0 || atomParameters[jj][GtaIndex] < 0.0);
+    bool haveDAPair = (atomParameters[ii][GtaIndex] < 0.0f && atomParameters[jj][adNIndex] < 0.0f)
+        || (atomParameters[ii][adNIndex] < 0.0f && atomParameters[jj][GtaIndex] < 0.0f);
+    double combinedSigma   = MMFFNonbondedForce::sigmaCombiningRule(atomParameters[ii][SigIndex], atomParameters[jj][SigIndex], haveDonor);
+    double combinedEpsilon = MMFFNonbondedForce::epsilonCombiningRule(combinedSigma, fabs(atomParameters[ii][adNIndex]),
+        fabs(atomParameters[jj][adNIndex]), fabs(atomParameters[ii][GtaIndex]), fabs(atomParameters[jj][GtaIndex]));
+    if (haveDAPair)
+        MMFFNonbondedForce::scaleSigmaEpsilon(combinedSigma, combinedEpsilon);
+    double inverseR     = 1.0/(deltaR[0][ReferenceForce::RIndex]);
+    double r_ij         = deltaR[0][ReferenceForce::RIndex];
+    double r_ij_2       = deltaR[0][ReferenceForce::R2Index];
+    double sigma_7      = combinedSigma*combinedSigma*combinedSigma;
+           sigma_7      = sigma_7*sigma_7*combinedSigma;
 
-    double eps = atomParameters[ii][EpsIndex]*atomParameters[jj][EpsIndex];
-    double dEdR = switchValue*eps*(12.0*sig6 - 6.0)*sig6;
-    if (cutoff)
-        dEdR += ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*(inverseR-2.0f*krf*r2);
-    else
-        dEdR += ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseR;
-    dEdR     *= inverseR*inverseR;
-    double energy = eps*(sig6-1.0)*sig6;
-    if (useSwitch) {
-        dEdR -= energy*switchDeriv*inverseR;
-        energy *= switchValue;
+    double r_ij_6       = r_ij_2*r_ij_2*r_ij_2;
+    double r_ij_7       = r_ij_6*r_ij;
+
+    double rho          = r_ij_7 + ghal*sigma_7;
+
+    double tau          = (dhal + 1.0)/(r_ij + dhal*combinedSigma);
+    double tau_7        = tau*tau*tau;
+           tau_7        = tau_7*tau_7*tau;
+
+    double dtau         = tau/(dhal + 1.0);
+
+    double ratio        = (sigma_7/rho);
+    double gtau         = combinedEpsilon*tau_7*r_ij_6*(ghal+1.0)*ratio*ratio;
+
+    double energy       = combinedEpsilon*tau_7*sigma_7*((ghal+1.0)*sigma_7/rho - 2.0);
+    double dEdR         = -7.0*(dtau*energy + gtau);
+
+    // tapering
+
+    if (cutoff && r_ij > taperCutoff) {
+        double delta    = r_ij - taperCutoff;
+        double taper    = 1.0 + delta*delta*delta*(taperCoefficients[C3] + delta*(taperCoefficients[C4] + delta*taperCoefficients[C5]));
+        double dtaper   = delta*delta*(3.0*taperCoefficients[C3] + delta*(4.0*taperCoefficients[C4] + delta*5.0*taperCoefficients[C5]));
+        dEdR            = energy*dtaper + dEdR*taper;
+        energy         *= taper;
     }
-    if (cutoff)
-        energy += ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*(inverseR+krf*r2-crf);
-    else
-        energy += ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseR;
+
+    double coulomb_dEdR = cutoff
+        ? ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*(inverseR-2.0f*krf*r_ij_2)
+        : ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseR;
+    dEdR = (dEdR + coulomb_dEdR*inverseR)*inverseR;
 
     // accumulate forces
 
@@ -670,4 +625,3 @@ void ReferenceLJCoulombIxn::calculateOneIxn(int ii, int jj, vector<Vec3>& atomCo
         energyByAtom[jj] += energy;
     }
 }
-

@@ -30,16 +30,17 @@
  * -------------------------------------------------------------------------- */
 
 #include "CudaTests.h"
+#include "openmm/MMFFNonbondedForce.h"
 #include "TestNonbondedForce.h"
 
-void testParallelComputation(NonbondedForce::NonbondedMethod method) {
+void testParallelComputation(MMFFNonbondedForce::NonbondedMethod method) {
     System system;
     const int numParticles = 200;
     for (int i = 0; i < numParticles; i++)
         system.addParticle(1.0);
-    NonbondedForce* force = new NonbondedForce();
+    MMFFNonbondedForce* force = new MMFFNonbondedForce();
     for (int i = 0; i < numParticles; i++)
-        force->addParticle(i%2-0.5, 0.5, 1.0);
+        force->addParticle(i%2-0.5, 0.5, 0.5, 1.0, '-');
     force->setNonbondedMethod(method);
     system.addForce(force);
     system.setDefaultPeriodicBoxVectors(Vec3(5,0,0), Vec3(0,5,0), Vec3(0,0,5));
@@ -78,9 +79,10 @@ void testParallelComputation(NonbondedForce::NonbondedMethod method) {
     // Modify some particle parameters and see if they still agree.
 
     for (int i = 0; i < numParticles; i += 5) {
-        double charge, sigma, epsilon;
-        force->getParticleParameters(i, charge, sigma, epsilon);
-        force->setParticleParameters(i, 0.9*charge, sigma, epsilon);
+        double charge, sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force->getParticleParameters(i, charge, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        force->setParticleParameters(i, 0.9*charge, sigma, G_t_alpha, alpha_d_N, vdwDA);
     }
     force->updateParametersInContext(context1);
     force->updateParametersInContext(context2);
@@ -97,15 +99,15 @@ void testReordering() {
     const int numParticles = 200;
     System system;
     system.setDefaultPeriodicBoxVectors(Vec3(6, 0, 0), Vec3(2.1, 6, 0), Vec3(-1.5, -0.5, 6));
-    NonbondedForce *nonbonded = new NonbondedForce();
-    nonbonded->setNonbondedMethod(NonbondedForce::PME);
+    MMFFNonbondedForce *nonbonded = new MMFFNonbondedForce();
+    nonbonded->setNonbondedMethod(MMFFNonbondedForce::PME);
     system.addForce(nonbonded);
     vector<Vec3> positions;
     OpenMM_SFMT::SFMT sfmt;
     init_gen_rand(0, sfmt);
     for (int i = 0; i < numParticles; i++) {
         system.addParticle(1.0);
-        nonbonded->addParticle(0.0, 0.0, 0.0);
+        nonbonded->addParticle(0.0, 0.0, 0.0, 0.0, '-');
         positions.push_back(Vec3(genrand_real2(sfmt)-0.5, genrand_real2(sfmt)-0.5, genrand_real2(sfmt)-0.5)*20);
     }
     VerletIntegrator integrator(0.001);
@@ -124,15 +126,15 @@ void testDeterministicForces() {
     const int numParticles = 1000;
     System system;
     system.setDefaultPeriodicBoxVectors(Vec3(6, 0, 0), Vec3(2.1, 6, 0), Vec3(-1.5, -0.5, 6));
-    NonbondedForce *nonbonded = new NonbondedForce();
-    nonbonded->setNonbondedMethod(NonbondedForce::PME);
+    MMFFNonbondedForce *nonbonded = new MMFFNonbondedForce();
+    nonbonded->setNonbondedMethod(MMFFNonbondedForce::PME);
     system.addForce(nonbonded);
     vector<Vec3> positions;
     OpenMM_SFMT::SFMT sfmt;
     init_gen_rand(0, sfmt);
     for (int i = 0; i < numParticles; i++) {
         system.addParticle(1.0);
-        nonbonded->addParticle(i%2 == 0 ? 1 : -1, 1, 0);
+        nonbonded->addParticle(i%2 == 0 ? 1.0 : -1.0, 1.0, 0.0, 0.0, '-');
         positions.push_back(Vec3(genrand_real2(sfmt)-0.5, genrand_real2(sfmt)-0.5, genrand_real2(sfmt)-0.5)*6);
     }
     VerletIntegrator integrator(0.001);
@@ -153,9 +155,9 @@ void testDeterministicForces() {
 }
 
 void runPlatformTests() {
-    testParallelComputation(NonbondedForce::NoCutoff);
-    testParallelComputation(NonbondedForce::Ewald);
-    testParallelComputation(NonbondedForce::PME);
+    testParallelComputation(MMFFNonbondedForce::NoCutoff);
+    testParallelComputation(MMFFNonbondedForce::Ewald);
+    testParallelComputation(MMFFNonbondedForce::PME);
     testReordering();
     testDeterministicForces();
 }

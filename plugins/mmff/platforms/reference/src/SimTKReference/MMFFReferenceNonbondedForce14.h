@@ -22,15 +22,15 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __ReferenceLJCoulomb14_H__
-#define __ReferenceLJCoulomb14_H__
+#ifndef __MMFFReferenceNonbondedForce14_H__
+#define __MMFFReferenceNonbondedForce14_H__
 
 #include "ReferenceBondIxn.h"
-#include "openmm/internal/windowsExport.h"
+#include "openmm/internal/windowsExportMMFF.h"
 
 namespace OpenMM {
 
-class OPENMM_EXPORT_MMFF ReferenceLJCoulomb14 : public ReferenceBondIxn {
+class OPENMM_EXPORT_MMFF MMFFReferenceNonbondedForce14 : public ReferenceBondIxn {
 
    public:
 
@@ -40,7 +40,7 @@ class OPENMM_EXPORT_MMFF ReferenceLJCoulomb14 : public ReferenceBondIxn {
       
          --------------------------------------------------------------------------------------- */
 
-       ReferenceLJCoulomb14();
+       MMFFReferenceNonbondedForce14();
 
       /**---------------------------------------------------------------------------------------
       
@@ -48,15 +48,19 @@ class OPENMM_EXPORT_MMFF ReferenceLJCoulomb14 : public ReferenceBondIxn {
       
          --------------------------------------------------------------------------------------- */
 
-       ~ReferenceLJCoulomb14();
+       ~MMFFReferenceNonbondedForce14();
 
       /**---------------------------------------------------------------------------------------
       
-         Calculate Ryckaert-Bellemans bond ixn
+         Calculate vdW 1-4 ixn
       
-         @param atomIndices      atom indices of 4 atoms in bond
+         @param atomIndices      atom indices of 2 interacting atoms
          @param atomCoordinates  atom coordinates
-         @param parameters       six RB parameters
+         @param parameters       four parameters:
+                                        parameters[0]= sigma
+                                        parameters[1]= G_t_alpha
+                                        parameters[2]= alpha_d_N
+                                        parameters[3]= charge
          @param forces           force array (forces added to current values)
          @param totalEnergy      if not null, the energy will be added to this
             
@@ -70,4 +74,4 @@ class OPENMM_EXPORT_MMFF ReferenceLJCoulomb14 : public ReferenceBondIxn {
 
 } // namespace OpenMM
 
-#endif // __ReferenceLJCoulomb14_H__
+#endif // __MMFFReferenceNonbondedForce14_H__

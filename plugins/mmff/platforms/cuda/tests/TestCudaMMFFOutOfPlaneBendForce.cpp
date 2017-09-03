@@ -37,6 +37,7 @@
 #include "openmm/Context.h"
 #include "OpenMMMMFF.h"
 #include "openmm/System.h"
+#include "openmm/OpenMMException.h"
 #include "openmm/LangevinIntegrator.h"
 #include <iostream>
 #include <vector>

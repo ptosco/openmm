@@ -1,6 +1,3 @@
-#ifndef OPENMM_RBTORSIONFORCE_PROXY_H_
-#define OPENMM_RBTORSIONFORCE_PROXY_H_
-
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
@@ -9,7 +6,7 @@
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2010 Stanford University and the Authors.           *
+ * Portions copyright (c) 2015 Stanford University and the Authors.           *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -32,22 +29,12 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/windowsExportMMFF.h"
-#include "openmm/serialization/SerializationProxy.h"
+#ifdef WIN32
+  #define _USE_MATH_DEFINES // Needed to get M_PI
+#endif
+#include "ReferencePlatform.h"
 
-namespace OpenMM {
+OpenMM::ReferencePlatform platform;
 
-/**
- * This is a proxy for serializing MMFFTorsionForce objects.
- */
-
-class OPENMM_EXPORT_MMFF MMFFTorsionForceProxy : public SerializationProxy {
-public:
-    MMFFTorsionForceProxy();
-    void serialize(const void* object, SerializationNode& node) const;
-    void* deserialize(const SerializationNode& node) const;
-};
-
-} // namespace OpenMM
-
-#endif /*OPENMM_RBTORSIONFORCE_PROXY_H_*/
+void initializeTests(int argc, char* argv[]) {
+}

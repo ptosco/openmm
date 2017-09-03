@@ -53,10 +53,8 @@ extern "C" OPENMM_EXPORT void registerKernelFactories() {
         platform.registerKernelFactory(CalcMMFFTorsionForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFStretchBendForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFOutOfPlaneBendForceKernel::Name(), factory);
-        platform.registerKernelFactory(CalcMMFFMultipoleForceKernel::Name(), factory);
-        platform.registerKernelFactory(CalcMMFFGeneralizedKirkwoodForceKernel::Name(), factory);
         platform.registerKernelFactory(CalcMMFFVdwForceKernel::Name(), factory);
-        platform.registerKernelFactory(CalcMMFFWcaDispersionForceKernel::Name(), factory);
+        platform.registerKernelFactory(CalcMMFFNonbondedForceKernel::Name(), factory);
     }
     catch (...) {
         // Ignore.  The CUDA platform isn't available.
@@ -92,17 +90,11 @@ KernelImpl* MMFFCudaKernelFactory::createKernelImpl(std::string name, const Plat
     if (name == CalcMMFFOutOfPlaneBendForceKernel::Name())
         return new CudaCalcMMFFOutOfPlaneBendForceKernel(name, platform, cu, context.getSystem());
 
-    if (name == CalcMMFFMultipoleForceKernel::Name())
-        return new CudaCalcMMFFMultipoleForceKernel(name, platform, cu, context.getSystem());
-
-    if (name == CalcMMFFGeneralizedKirkwoodForceKernel::Name())
-        return new CudaCalcMMFFGeneralizedKirkwoodForceKernel(name, platform, cu, context.getSystem());
-
     if (name == CalcMMFFVdwForceKernel::Name())
         return new CudaCalcMMFFVdwForceKernel(name, platform, cu, context.getSystem());
 
-    if (name == CalcMMFFWcaDispersionForceKernel::Name())
-        return new CudaCalcMMFFWcaDispersionForceKernel(name, platform, cu, context.getSystem());
+    if (name == CalcMMFFNonbondedForceKernel::Name())
+        return new CudaCalcMMFFNonbondedForceKernel(name, platform, cu, context.getSystem());
 
     throw OpenMMException((std::string("Tried to create kernel with illegal kernel name '")+name+"'").c_str());
 }

@@ -34,11 +34,11 @@
  */
 
 #include "openmm/internal/AssertionUtilities.h"
-//#include "MMFFTinkerParameterFile.h"
 #include "openmm/Context.h"
 #include "OpenMMMMFF.h"
 #include "openmm/System.h"
 #include "openmm/LangevinIntegrator.h"
+#include "openmm/OpenMMException.h"
 #include <iostream>
 #include <vector>
 

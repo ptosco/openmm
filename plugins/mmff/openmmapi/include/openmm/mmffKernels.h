@@ -244,106 +244,6 @@ public:
 };
 
 /**
- * This kernel is invoked by MMFFMultipoleForce to calculate the forces acting on the system and the energy of the system.
- */
-class CalcMMFFMultipoleForceKernel : public KernelImpl {
-
-public:
-
-    static std::string Name() {
-        return "CalcMMFFMultipoleForce";
-    }
-
-    CalcMMFFMultipoleForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
-    }
-
-    /**
-     * Initialize the kernel.
-     *
-     * @param system     the System this kernel will be applied to
-     * @param force      the MultipoleForce this kernel will be used for
-     */
-    virtual void initialize(const System& system, const MMFFMultipoleForce& force) = 0;
-
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
-
-    virtual void getLabFramePermanentDipoles(ContextImpl& context, std::vector<Vec3>& dipoles) = 0;
-    virtual void getInducedDipoles(ContextImpl& context, std::vector<Vec3>& dipoles) = 0;
-    virtual void getTotalDipoles(ContextImpl& context, std::vector<Vec3>& dipoles) = 0;
-
-    virtual void getElectrostaticPotential(ContextImpl& context, const std::vector< Vec3 >& inputGrid,
-                                           std::vector< double >& outputElectrostaticPotential) = 0;
-
-    virtual void getSystemMultipoleMoments(ContextImpl& context, std::vector< double >& outputMultipoleMoments) = 0;
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFMultipoleForce to copy the parameters from
-     */
-    virtual void copyParametersToContext(ContextImpl& context, const MMFFMultipoleForce& force) = 0;
-
-    /**
-     * Get the parameters being used for PME.
-     *
-     * @param alpha   the separation parameter
-     * @param nx      the number of grid points along the X axis
-     * @param ny      the number of grid points along the Y axis
-     * @param nz      the number of grid points along the Z axis
-     */
-    virtual void getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const = 0;
-};
-
-/**
- * This kernel is invoked by MMFFGeneralizedKirkwoodForce to calculate the forces acting on the system and the energy of the system.
- */
-class CalcMMFFGeneralizedKirkwoodForceKernel : public KernelImpl {
-
-public:
-
-    static std::string Name() {
-        return "CalcMMFFGeneralizedKirkwoodForce";
-    }
-
-    CalcMMFFGeneralizedKirkwoodForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
-    }
-
-    /**
-     * Initialize the kernel.
-     *
-     * @param system     the System this kernel will be applied to
-     * @param force      the GBSAOBCForce this kernel will be used for
-     */
-    virtual void initialize(const System& system, const MMFFGeneralizedKirkwoodForce& force) = 0;
-
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFGeneralizedKirkwoodForce to copy the parameters from
-     */
-    virtual void copyParametersToContext(ContextImpl& context, const MMFFGeneralizedKirkwoodForce& force) = 0;
-};
-
-
-/**
  * This kernel is invoked by MMFFVdwForce to calculate the vdw forces acting on the system and the vdw energy of the system.
  */
 class CalcMMFFVdwForceKernel : public KernelImpl {
@@ -360,7 +260,7 @@ public:
      * Initialize the kernel.
      *
      * @param system     the System this kernel will be applied to
-     * @param force      the GBSAOBCForce this kernel will be used for
+     * @param force      the VdwForce this kernel will be used for
      */
     virtual void initialize(const System& system, const MMFFVdwForce& force) = 0;
 
@@ -383,43 +283,56 @@ public:
 };
 
 /**
- * This kernel is invoked by MMFFWcaDispersionForce to calculate the WCA dispersion forces acting on the system and the WCA dispersion energy of the system.
+ * This kernel is invoked by MMFFNonbondedForce to calculate the forces acting on the system and the energy of the system.
  */
-class CalcMMFFWcaDispersionForceKernel : public KernelImpl {
-
+class CalcMMFFNonbondedForceKernel : public KernelImpl {
 public:
-
+    enum NonbondedMethod {
+        NoCutoff = 0,
+        CutoffNonPeriodic = 1,
+        CutoffPeriodic = 2,
+        Ewald = 3,
+        PME = 4
+    };
     static std::string Name() {
-        return "CalcMMFFWcaDispersionForce";
+        return "CalcMMFFNonbondedForce";
     }
-
-    CalcMMFFWcaDispersionForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
+    CalcMMFFNonbondedForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
     }
-
     /**
      * Initialize the kernel.
-     *
+     * 
      * @param system     the System this kernel will be applied to
-     * @param force      the GBSAOBCForce this kernel will be used for
+     * @param force      the NonbondedForce this kernel will be used for
      */
-    virtual void initialize(const System& system, const MMFFWcaDispersionForce& force) = 0;
-
+    virtual void initialize(const System& system, const MMFFNonbondedForce& force) = 0;
     /**
      * Execute the kernel to calculate the forces and/or energy.
      *
      * @param context        the context in which to execute this kernel
      * @param includeForces  true if forces should be calculated
      * @param includeEnergy  true if the energy should be calculated
+     * @param includeDirect  true if direct space interactions should be included
+     * @param includeReciprocal  true if reciprocal space interactions should be included
      * @return the potential energy due to the force
      */
-    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
+    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy, bool includeDirect, bool includeReciprocal) = 0;
     /**
      * Copy changed parameters over to a context.
      *
      * @param context    the context to copy parameters to
-     * @param force      the MMFFWcaDispersionForce to copy the parameters from
+     * @param force      the NonbondedForce to copy the parameters from
      */
-    virtual void copyParametersToContext(ContextImpl& context, const MMFFWcaDispersionForce& force) = 0;
+    virtual void copyParametersToContext(ContextImpl& context, const MMFFNonbondedForce& force) = 0;
+    /**
+     * Get the parameters being used for PME.
+     *
+     * @param alpha   the separation parameter
+     * @param nx      the number of grid points along the X axis
+     * @param ny      the number of grid points along the Y axis
+     * @param nz      the number of grid points along the Z axis
+     */
+    virtual void getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const = 0;
 };
 
 } // namespace OpenMM

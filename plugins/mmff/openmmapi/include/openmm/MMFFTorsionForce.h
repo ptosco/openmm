@@ -36,7 +36,7 @@
 #include "openmm/Vec3.h"
 #include <map>
 #include <vector>
-#include "openmm/internal/windowsExport.h"
+#include "openmm/internal/windowsExportMMFF.h"
 
 namespace OpenMM {
 

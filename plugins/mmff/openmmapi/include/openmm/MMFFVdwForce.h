@@ -44,12 +44,6 @@ namespace OpenMM {
  * To use it, create an MMFFVdwForce object then call addParticle() once for each particle.  After
  * a particle has been added, you can modify its force field parameters by calling setParticleParameters().
  * This will have no effect on Contexts that already exist unless you call updateParametersInContext().
- *
- * A unique feature of this class is that the interaction site for a particle does not need to be
- * exactly at the particle's location.  Instead, it can be placed a fraction of the distance from that
- * particle to another one.  This is typically done for hydrogens to place the interaction site slightly
- * closer to the parent atom.  The fraction is known as the "reduction factor", since it reduces the distance
- * from the parent atom to the interaction site.
  */
 
 class OPENMM_EXPORT_MMFF MMFFVdwForce : public Force {
@@ -59,15 +53,19 @@ public:
      */
     enum NonbondedMethod {
         /**
-         * No cutoff is applied to nonbonded interactions.  The full set of N^2 interactions is computed exactly.
+         * No cutoff is applied to the interactions.  The full set of N^2 interactions is computed exactly.
          * This necessarily means that periodic boundary conditions cannot be used.  This is the default.
          */
         NoCutoff = 0,
         /**
-         * Periodic boundary conditions are used, so that each particle interacts only with the nearest periodic copy of
-         * each other particle.  Interactions beyond the cutoff distance are ignored.
+         * Interactions beyond the cutoff distance are ignored.  
          */
-        CutoffPeriodic = 1,
+        CutoffNonPeriodic = 1,
+        /**
+         * Periodic boundary conditions are used, so that each particle interacts only with the nearest periodic copy of
+         * each other particle.  Interactions beyond the cutoff distance are ignored.  
+         */
+        CutoffPeriodic = 2,
     };
 
     /**

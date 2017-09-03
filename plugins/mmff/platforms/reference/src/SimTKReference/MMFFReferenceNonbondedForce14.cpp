@@ -26,7 +26,8 @@
 #include <sstream>
 
 #include "SimTKOpenMMUtilities.h"
-#include "ReferenceLJCoulomb14.h"
+#include "MMFFReferenceNonbondedForce.h"
+#include "MMFFReferenceNonbondedForce14.h"
 #include "ReferenceForce.h"
 
 using std::vector;
@@ -34,56 +35,74 @@ using namespace OpenMM;
 
 /**---------------------------------------------------------------------------------------
 
-   ReferenceLJCoulomb14 constructor
+   MMFFReferenceNonbondedForce14 constructor
 
    --------------------------------------------------------------------------------------- */
 
-ReferenceLJCoulomb14::ReferenceLJCoulomb14() {
+MMFFReferenceNonbondedForce14::MMFFReferenceNonbondedForce14() {
 }
 
 /**---------------------------------------------------------------------------------------
 
-   ReferenceLJCoulomb14 destructor
+   MMFFReferenceNonbondedForce14 destructor
 
    --------------------------------------------------------------------------------------- */
 
-ReferenceLJCoulomb14::~ReferenceLJCoulomb14() {
+MMFFReferenceNonbondedForce14::~MMFFReferenceNonbondedForce14() {
 }
 
 /**---------------------------------------------------------------------------------------
 
-   Calculate LJ 1-4 ixn
+   Calculate vdW 1-4 ixn
 
-   @param atomIndices      atom indices of 4 atoms in bond
+   @param atomIndices      atom indices of 2 interacting atoms
    @param atomCoordinates  atom coordinates
-   @param parameters       three parameters:
-                                        parameters[0]= (c12/c6)**1/6  (sigma)
-                                        parameters[1]= c6*c6/c12      (4*epsilon)
-                                        parameters[2]= epsfac*q1*q2
+   @param parameters       four parameters:
+                                        parameters[0]= sigma
+                                        parameters[1]= G_t_alpha
+                                        parameters[2]= alpha_d_N
+                                        parameters[3]= charge
    @param forces           force array (forces added to current values)
    @param totalEnergy      if not null, the energy will be added to this
 
    --------------------------------------------------------------------------------------- */
 
-void ReferenceLJCoulomb14::calculateBondIxn(int* atomIndices, vector<Vec3>& atomCoordinates,
+void MMFFReferenceNonbondedForce14::calculateBondIxn(int* atomIndices, vector<Vec3>& atomCoordinates,
                                      double* parameters, vector<Vec3>& forces,
                                      double* totalEnergy, double* energyParamDerivs) {
-   double deltaR[2][ReferenceForce::LastDeltaRIndex];
+    double deltaR[2][ReferenceForce::LastDeltaRIndex];
 
-   // get deltaR, R2, and R between 2 atoms
+    // get deltaR, R2, and R between 2 atoms
 
-   int atomAIndex = atomIndices[0];
-   int atomBIndex = atomIndices[1];
-   ReferenceForce::getDeltaR(atomCoordinates[atomBIndex], atomCoordinates[atomAIndex], deltaR[0]);  
+    int atomAIndex = atomIndices[0];
+    int atomBIndex = atomIndices[1];
+    ReferenceForce::getDeltaR(atomCoordinates[atomBIndex], atomCoordinates[atomAIndex], deltaR[0]);  
 
-   double inverseR  = 1.0/(deltaR[0][ReferenceForce::RIndex]);
-   double sig2      = inverseR*parameters[0];
-          sig2     *= sig2;
-   double sig6      = sig2*sig2*sig2;
+    double inverseR     = 1.0/(deltaR[0][ReferenceForce::RIndex]);
+    double r_ij         = deltaR[0][ReferenceForce::RIndex];
+    double r_ij_2       = deltaR[0][ReferenceForce::R2Index];
+    double sigma_7      = parameters[0]*parameters[0]*parameters[0];
+           sigma_7      = sigma_7*sigma_7*parameters[0];
 
-   double dEdR      = parameters[1]*(12.0*sig6 - 6.0)*sig6;
-          dEdR     += ONE_4PI_EPS0*parameters[2]*inverseR;
-          dEdR     *= inverseR*inverseR;
+    double r_ij_6       = r_ij_2*r_ij_2*r_ij_2;
+    double r_ij_7       = r_ij_6*r_ij;
+
+    double rho          = r_ij_7 + MMFFReferenceNonbondedForce::ghal*sigma_7;
+
+    double tau          = (MMFFReferenceNonbondedForce::dhal + 1.0)/(r_ij + MMFFReferenceNonbondedForce::dhal*parameters[0]);
+    double tau_7        = tau*tau*tau;
+           tau_7        = tau_7*tau_7*tau;
+
+    double dtau         = tau/(MMFFReferenceNonbondedForce::dhal + 1.0);
+
+    double ratio        = (sigma_7/rho);
+    double gtau         = parameters[1]*tau_7*r_ij_6*(MMFFReferenceNonbondedForce::ghal+1.0)*ratio*ratio;
+
+    double vdwEnergy    = parameters[1]*tau_7*sigma_7*((MMFFReferenceNonbondedForce::ghal+1.0)*sigma_7/rho - 2.0);
+    double vdw_dEdR     = -7.0*(dtau*vdwEnergy + gtau);
+
+    double coulEnergy   = ONE_4PI_EPS0*parameters[2]*inverseR;
+    double dEdR         = inverseR*(vdw_dEdR + coulEnergy*inverseR);
 
    // accumulate forces
 
@@ -96,5 +115,5 @@ void ReferenceLJCoulomb14::calculateBondIxn(int* atomIndices, vector<Vec3>& atom
    // accumulate energies
 
    if (totalEnergy != NULL)
-       *totalEnergy += parameters[1]*(sig6 - 1.0)*sig6 + (ONE_4PI_EPS0*parameters[2]*inverseR);
+       *totalEnergy += vdw_dEdR + coulEnergy;
 }

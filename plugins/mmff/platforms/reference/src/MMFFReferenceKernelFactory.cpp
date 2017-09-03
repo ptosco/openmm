@@ -47,16 +47,14 @@ extern "C" OPENMM_EXPORT void registerKernelFactories() {
     for (int i = 0; i < Platform::getNumPlatforms(); i++) {
         Platform& platform = Platform::getPlatform(i);
         if (dynamic_cast<ReferencePlatform*>(&platform) != NULL) {
-             MMFFReferenceKernelFactory* factory = new MMFFReferenceKernelFactory();
-             platform.registerKernelFactory(CalcMMFFBondForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFAngleForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFTorsionForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFStretchBendForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFOutOfPlaneBendForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFVdwForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFMultipoleForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFGeneralizedKirkwoodForceKernel::Name(), factory);
-             platform.registerKernelFactory(CalcMMFFWcaDispersionForceKernel::Name(), factory);
+            MMFFReferenceKernelFactory* factory = new MMFFReferenceKernelFactory();
+            platform.registerKernelFactory(CalcMMFFBondForceKernel::Name(), factory);
+            platform.registerKernelFactory(CalcMMFFAngleForceKernel::Name(), factory);
+            platform.registerKernelFactory(CalcMMFFTorsionForceKernel::Name(), factory);
+            platform.registerKernelFactory(CalcMMFFStretchBendForceKernel::Name(), factory);
+            platform.registerKernelFactory(CalcMMFFOutOfPlaneBendForceKernel::Name(), factory);
+            platform.registerKernelFactory(CalcMMFFVdwForceKernel::Name(), factory);
+            platform.registerKernelFactory(CalcMMFFNonbondedForceKernel::Name(), factory);
         }
     }
 }
@@ -88,14 +86,8 @@ KernelImpl* MMFFReferenceKernelFactory::createKernelImpl(std::string name, const
     if (name == CalcMMFFVdwForceKernel::Name())
         return new ReferenceCalcMMFFVdwForceKernel(name, platform, context.getSystem());
 
-    if (name == CalcMMFFMultipoleForceKernel::Name())
-        return new ReferenceCalcMMFFMultipoleForceKernel(name, platform, context.getSystem());
-
-    if (name == CalcMMFFGeneralizedKirkwoodForceKernel::Name())
-        return new ReferenceCalcMMFFGeneralizedKirkwoodForceKernel(name, platform, context.getSystem());
-
-    if (name == CalcMMFFWcaDispersionForceKernel::Name())
-        return new ReferenceCalcMMFFWcaDispersionForceKernel(name, platform, context.getSystem());
+    if (name == CalcMMFFNonbondedForceKernel::Name())
+        return new ReferenceCalcMMFFNonbondedForceKernel(name, platform, context.getSystem());
 
     throw OpenMMException((std::string("Tried to create kernel with illegal kernel name '")+name+"'").c_str());
 }

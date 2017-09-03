@@ -26,22 +26,20 @@
 
 #include "MMFFReferenceKernels.h"
 #include "MMFFReferenceBondForce.h"
+#include "ReferenceBondForce.h"
 #include "MMFFReferenceAngleForce.h"
 #include "MMFFReferenceTorsionForce.h"
 #include "MMFFReferenceStretchBendForce.h"
 #include "MMFFReferenceOutOfPlaneBendForce.h"
 #include "MMFFReferenceVdwForce.h"
-#include "MMFFReferenceWcaDispersionForce.h"
-#include "MMFFReferenceGeneralizedKirkwoodForce.h"
-#include "openmm/internal/MMFFWcaDispersionForceImpl.h"
+#include "MMFFReferenceNonbondedForce.h"
+#include "MMFFReferenceNonbondedForce14.h"
 #include "ReferencePlatform.h"
 #include "openmm/internal/ContextImpl.h"
-#include "openmm/MMFFMultipoleForce.h"
-#include "openmm/internal/MMFFMultipoleForceImpl.h"
 #include "openmm/internal/MMFFVdwForceImpl.h"
-#include "openmm/internal/MMFFGeneralizedKirkwoodForceImpl.h"
-#include "openmm/NonbondedForce.h"
-#include "openmm/internal/NonbondedForceImpl.h"
+#include "openmm/MMFFNonbondedForce.h"
+#include "openmm/internal/MMFFNonbondedForceImpl.h"
+#include "openmm/OpenMMException.h"
 
 #include <cmath>
 #ifdef _MSC_VER
@@ -50,6 +48,36 @@
 
 using namespace OpenMM;
 using namespace std;
+
+static int** allocateIntArray(int length, int width) {
+    int** array = new int*[length];
+    for (int i = 0; i < length; ++i)
+        array[i] = new int[width];
+    return array;
+}
+
+static double** allocateRealArray(int length, int width) {
+    double** array = new double*[length];
+    for (int i = 0; i < length; ++i)
+        array[i] = new double[width];
+    return array;
+}
+
+static void disposeIntArray(int** array, int size) {
+    if (array) {
+        for (int i = 0; i < size; ++i)
+            delete[] array[i];
+        delete[] array;
+    }
+}
+
+static void disposeRealArray(double** array, int size) {
+    if (array) {
+        for (int i = 0; i < size; ++i)
+            delete[] array[i];
+        delete[] array;
+    }
+}
 
 static vector<Vec3>& extractPositions(ContextImpl& context) {
     ReferencePlatform::PlatformData* data = reinterpret_cast<ReferencePlatform::PlatformData*>(context.getPlatformData());
@@ -362,490 +390,8 @@ void ReferenceCalcMMFFOutOfPlaneBendForceKernel::copyParametersToContext(Context
 }
 
 /* -------------------------------------------------------------------------- *
- *                             MMFFMultipole                                *
+ *                           MMFFVdw                                          *
  * -------------------------------------------------------------------------- */
-
-ReferenceCalcMMFFMultipoleForceKernel::ReferenceCalcMMFFMultipoleForceKernel(std::string name, const Platform& platform, const System& system) : 
-         CalcMMFFMultipoleForceKernel(name, platform), system(system), numMultipoles(0), mutualInducedMaxIterations(60), mutualInducedTargetEpsilon(1.0e-03),
-                                                         usePme(false),alphaEwald(0.0), cutoffDistance(1.0) {  
-
-}
-
-ReferenceCalcMMFFMultipoleForceKernel::~ReferenceCalcMMFFMultipoleForceKernel() {
-}
-
-void ReferenceCalcMMFFMultipoleForceKernel::initialize(const System& system, const MMFFMultipoleForce& force) {
-
-    numMultipoles   = force.getNumMultipoles();
-
-    charges.resize(numMultipoles);
-    dipoles.resize(3*numMultipoles);
-    quadrupoles.resize(9*numMultipoles);
-    tholes.resize(numMultipoles);
-    dampingFactors.resize(numMultipoles);
-    polarity.resize(numMultipoles);
-    axisTypes.resize(numMultipoles);
-    multipoleAtomZs.resize(numMultipoles);
-    multipoleAtomXs.resize(numMultipoles);
-    multipoleAtomYs.resize(numMultipoles);
-    multipoleAtomCovalentInfo.resize(numMultipoles);
-
-    int dipoleIndex      = 0;
-    int quadrupoleIndex  = 0;
-    double totalCharge   = 0.0;
-    for (int ii = 0; ii < numMultipoles; ii++) {
-
-        // multipoles
-
-        int axisType, multipoleAtomZ, multipoleAtomX, multipoleAtomY;
-        double charge, tholeD, dampingFactorD, polarityD;
-        std::vector<double> dipolesD;
-        std::vector<double> quadrupolesD;
-        force.getMultipoleParameters(ii, charge, dipolesD, quadrupolesD, axisType, multipoleAtomZ, multipoleAtomX, multipoleAtomY,
-                                     tholeD, dampingFactorD, polarityD);
-
-        totalCharge                       += charge;
-        axisTypes[ii]                      = axisType;
-        multipoleAtomZs[ii]                = multipoleAtomZ;
-        multipoleAtomXs[ii]                = multipoleAtomX;
-        multipoleAtomYs[ii]                = multipoleAtomY;
-
-        charges[ii]                        = charge;
-        tholes[ii]                         = tholeD;
-        dampingFactors[ii]                 = dampingFactorD;
-        polarity[ii]                       = polarityD;
-
-        dipoles[dipoleIndex++]             = dipolesD[0];
-        dipoles[dipoleIndex++]             = dipolesD[1];
-        dipoles[dipoleIndex++]             = dipolesD[2];
-        
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[0];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[1];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[2];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[3];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[4];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[5];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[6];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[7];
-        quadrupoles[quadrupoleIndex++]     = quadrupolesD[8];
-
-        // covalent info
-
-        std::vector< std::vector<int> > covalentLists;
-        force.getCovalentMaps(ii, covalentLists);
-        multipoleAtomCovalentInfo[ii] = covalentLists;
-
-    }
-
-    polarizationType = force.getPolarizationType();
-    if (polarizationType == MMFFMultipoleForce::Mutual) {
-        mutualInducedMaxIterations = force.getMutualInducedMaxIterations();
-        mutualInducedTargetEpsilon = force.getMutualInducedTargetEpsilon();
-    } else if (polarizationType == MMFFMultipoleForce::Extrapolated) {
-        extrapolationCoefficients = force.getExtrapolationCoefficients();
-    }
-
-    // PME
-
-    nonbondedMethod  = force.getNonbondedMethod();
-    if (nonbondedMethod == MMFFMultipoleForce::PME) {
-        usePme     = true;
-        pmeGridDimension.resize(3);
-        force.getPMEParameters(alphaEwald, pmeGridDimension[0], pmeGridDimension[1], pmeGridDimension[2]);
-        cutoffDistance = force.getCutoffDistance();
-        if (pmeGridDimension[0] == 0 || alphaEwald == 0.0) {
-            NonbondedForce nb;
-            nb.setEwaldErrorTolerance(force.getEwaldErrorTolerance());
-            nb.setCutoffDistance(force.getCutoffDistance());
-            int gridSizeX, gridSizeY, gridSizeZ;
-            NonbondedForceImpl::calcPMEParameters(system, nb, alphaEwald, gridSizeX, gridSizeY, gridSizeZ, false);
-            pmeGridDimension[0] = gridSizeX;
-            pmeGridDimension[1] = gridSizeY;
-            pmeGridDimension[2] = gridSizeZ;
-        }    
-    } else {
-        usePme = false;
-    }
-    return;
-}
-
-MMFFReferenceMultipoleForce* ReferenceCalcMMFFMultipoleForceKernel::setupMMFFReferenceMultipoleForce(ContextImpl& context)
-{
-
-    // mmffReferenceMultipoleForce is set to MMFFReferenceGeneralizedKirkwoodForce if MMFFGeneralizedKirkwoodForce is present
-    // mmffReferenceMultipoleForce is set to MMFFReferencePmeMultipoleForce if 'usePme' is set
-    // mmffReferenceMultipoleForce is set to MMFFReferenceMultipoleForce otherwise
-
-    // check if MMFFGeneralizedKirkwoodForce is present 
-
-    ReferenceCalcMMFFGeneralizedKirkwoodForceKernel* gkKernel = NULL;
-    for (unsigned int ii = 0; ii < context.getForceImpls().size() && gkKernel == NULL; ii++) {
-        MMFFGeneralizedKirkwoodForceImpl* gkImpl = dynamic_cast<MMFFGeneralizedKirkwoodForceImpl*>(context.getForceImpls()[ii]);
-        if (gkImpl != NULL) {
-            gkKernel = dynamic_cast<ReferenceCalcMMFFGeneralizedKirkwoodForceKernel*>(&gkImpl->getKernel().getImpl());
-        }
-    }    
-
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = NULL;
-    if (gkKernel) {
-
-        // mmffReferenceGeneralizedKirkwoodForce is deleted in MMFFReferenceGeneralizedKirkwoodMultipoleForce
-        // destructor
-
-        MMFFReferenceGeneralizedKirkwoodForce* mmffReferenceGeneralizedKirkwoodForce = new MMFFReferenceGeneralizedKirkwoodForce();
-        mmffReferenceGeneralizedKirkwoodForce->setNumParticles(gkKernel->getNumParticles());
-        mmffReferenceGeneralizedKirkwoodForce->setSoluteDielectric(gkKernel->getSoluteDielectric());
-        mmffReferenceGeneralizedKirkwoodForce->setSolventDielectric(gkKernel->getSolventDielectric());
-        mmffReferenceGeneralizedKirkwoodForce->setDielectricOffset(gkKernel->getDielectricOffset());
-        mmffReferenceGeneralizedKirkwoodForce->setProbeRadius(gkKernel->getProbeRadius());
-        mmffReferenceGeneralizedKirkwoodForce->setSurfaceAreaFactor(gkKernel->getSurfaceAreaFactor());
-        mmffReferenceGeneralizedKirkwoodForce->setIncludeCavityTerm(gkKernel->getIncludeCavityTerm());
-        mmffReferenceGeneralizedKirkwoodForce->setDirectPolarization(gkKernel->getDirectPolarization());
-
-        vector<double> parameters; 
-        gkKernel->getAtomicRadii(parameters);
-        mmffReferenceGeneralizedKirkwoodForce->setAtomicRadii(parameters);
-
-        gkKernel->getScaleFactors(parameters);
-        mmffReferenceGeneralizedKirkwoodForce->setScaleFactors(parameters);
-
-        gkKernel->getCharges(parameters);
-        mmffReferenceGeneralizedKirkwoodForce->setCharges(parameters);
-
-        // calculate Grycuk Born radii
-
-        vector<Vec3>& posData   = extractPositions(context);
-        mmffReferenceGeneralizedKirkwoodForce->calculateGrycukBornRadii(posData);
-
-        mmffReferenceMultipoleForce = new MMFFReferenceGeneralizedKirkwoodMultipoleForce(mmffReferenceGeneralizedKirkwoodForce);
-
-    } else if (usePme) {
-
-        MMFFReferencePmeMultipoleForce* mmffReferencePmeMultipoleForce = new MMFFReferencePmeMultipoleForce();
-        mmffReferencePmeMultipoleForce->setAlphaEwald(alphaEwald);
-        mmffReferencePmeMultipoleForce->setCutoffDistance(cutoffDistance);
-        mmffReferencePmeMultipoleForce->setPmeGridDimensions(pmeGridDimension);
-        Vec3* boxVectors = extractBoxVectors(context);
-        double minAllowedSize = 1.999999*cutoffDistance;
-        if (boxVectors[0][0] < minAllowedSize || boxVectors[1][1] < minAllowedSize || boxVectors[2][2] < minAllowedSize) {
-            throw OpenMMException("The periodic box size has decreased to less than twice the nonbonded cutoff.");
-        }
-        mmffReferencePmeMultipoleForce->setPeriodicBoxSize(boxVectors);
-        mmffReferenceMultipoleForce = static_cast<MMFFReferenceMultipoleForce*>(mmffReferencePmeMultipoleForce);
-
-    } else {
-         mmffReferenceMultipoleForce = new MMFFReferenceMultipoleForce(MMFFReferenceMultipoleForce::NoCutoff);
-    }
-
-    // set polarization type
-
-    if (polarizationType == MMFFMultipoleForce::Mutual) {
-        mmffReferenceMultipoleForce->setPolarizationType(MMFFReferenceMultipoleForce::Mutual);
-        mmffReferenceMultipoleForce->setMutualInducedDipoleTargetEpsilon(mutualInducedTargetEpsilon);
-        mmffReferenceMultipoleForce->setMaximumMutualInducedDipoleIterations(mutualInducedMaxIterations);
-    } else if (polarizationType == MMFFMultipoleForce::Direct) {
-        mmffReferenceMultipoleForce->setPolarizationType(MMFFReferenceMultipoleForce::Direct);
-    } else if (polarizationType == MMFFMultipoleForce::Extrapolated) {
-        mmffReferenceMultipoleForce->setPolarizationType(MMFFReferenceMultipoleForce::Extrapolated);
-        mmffReferenceMultipoleForce->setExtrapolationCoefficients(extrapolationCoefficients);
-    } else {
-        throw OpenMMException("Polarization type not recognzied.");
-    }
-
-    return mmffReferenceMultipoleForce;
-
-}
-
-double ReferenceCalcMMFFMultipoleForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = setupMMFFReferenceMultipoleForce(context);
-
-    vector<Vec3>& posData = extractPositions(context);
-    vector<Vec3>& forceData = extractForces(context);
-    double energy = mmffReferenceMultipoleForce->calculateForceAndEnergy(posData, charges, dipoles, quadrupoles, tholes,
-                                                                           dampingFactors, polarity, axisTypes, 
-                                                                           multipoleAtomZs, multipoleAtomXs, multipoleAtomYs,
-                                                                           multipoleAtomCovalentInfo, forceData);
-
-    delete mmffReferenceMultipoleForce;
-
-    return static_cast<double>(energy);
-}
-
-void ReferenceCalcMMFFMultipoleForceKernel::getInducedDipoles(ContextImpl& context, vector<Vec3>& outputDipoles) {
-    int numParticles = context.getSystem().getNumParticles();
-    outputDipoles.resize(numParticles);
-
-    // Create an MMFFReferenceMultipoleForce to do the calculation.
-    
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = setupMMFFReferenceMultipoleForce(context);
-    vector<Vec3>& posData = extractPositions(context);
-    
-    // Retrieve the induced dipoles.
-    
-    vector<Vec3> inducedDipoles;
-    mmffReferenceMultipoleForce->calculateInducedDipoles(posData, charges, dipoles, quadrupoles, tholes,
-            dampingFactors, polarity, axisTypes, multipoleAtomZs, multipoleAtomXs, multipoleAtomYs, multipoleAtomCovalentInfo, inducedDipoles);
-    for (int i = 0; i < numParticles; i++)
-        outputDipoles[i] = inducedDipoles[i];
-    delete mmffReferenceMultipoleForce;
-}
-
-void ReferenceCalcMMFFMultipoleForceKernel::getLabFramePermanentDipoles(ContextImpl& context, vector<Vec3>& outputDipoles) {
-    int numParticles = context.getSystem().getNumParticles();
-    outputDipoles.resize(numParticles);
-
-    // Create an MMFFReferenceMultipoleForce to do the calculation.
-    
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = setupMMFFReferenceMultipoleForce(context);
-    vector<Vec3>& posData = extractPositions(context);
-    
-    // Retrieve the permanent dipoles in the lab frame.
-    
-    vector<Vec3> labFramePermanentDipoles;
-    mmffReferenceMultipoleForce->calculateLabFramePermanentDipoles(posData, charges, dipoles, quadrupoles, tholes, 
-            dampingFactors, polarity, axisTypes, multipoleAtomZs, multipoleAtomXs, multipoleAtomYs, multipoleAtomCovalentInfo, labFramePermanentDipoles);
-    for (int i = 0; i < numParticles; i++)
-        outputDipoles[i] = labFramePermanentDipoles[i];
-    delete mmffReferenceMultipoleForce;
-}
-
-
-void ReferenceCalcMMFFMultipoleForceKernel::getTotalDipoles(ContextImpl& context, vector<Vec3>& outputDipoles) {
-    int numParticles = context.getSystem().getNumParticles();
-    outputDipoles.resize(numParticles);
-
-    // Create an MMFFReferenceMultipoleForce to do the calculation.
-    
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = setupMMFFReferenceMultipoleForce(context);
-    vector<Vec3>& posData = extractPositions(context);
-    
-    // Retrieve the permanent dipoles in the lab frame.
-    
-    vector<Vec3> totalDipoles;
-    mmffReferenceMultipoleForce->calculateTotalDipoles(posData, charges, dipoles, quadrupoles, tholes,
-            dampingFactors, polarity, axisTypes, multipoleAtomZs, multipoleAtomXs, multipoleAtomYs, multipoleAtomCovalentInfo, totalDipoles);
-
-    for (int i = 0; i < numParticles; i++)
-        outputDipoles[i] = totalDipoles[i];
-    delete mmffReferenceMultipoleForce;
-}
-
-
-
-void ReferenceCalcMMFFMultipoleForceKernel::getElectrostaticPotential(ContextImpl& context, const std::vector< Vec3 >& inputGrid,
-                                                                        std::vector< double >& outputElectrostaticPotential) {
-
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = setupMMFFReferenceMultipoleForce(context);
-    vector<Vec3>& posData                                     = extractPositions(context);
-    vector<Vec3> grid(inputGrid.size());
-    vector<double> potential(inputGrid.size());
-    for (unsigned int ii = 0; ii < inputGrid.size(); ii++) {
-        grid[ii] = inputGrid[ii];
-    }
-    mmffReferenceMultipoleForce->calculateElectrostaticPotential(posData, charges, dipoles, quadrupoles, tholes,
-                                                                   dampingFactors, polarity, axisTypes, 
-                                                                   multipoleAtomZs, multipoleAtomXs, multipoleAtomYs,
-                                                                   multipoleAtomCovalentInfo, grid, potential);
-
-    outputElectrostaticPotential.resize(inputGrid.size());
-    for (unsigned int ii = 0; ii < inputGrid.size(); ii++) {
-        outputElectrostaticPotential[ii] = potential[ii];
-    }
-
-    delete mmffReferenceMultipoleForce;
-}
-
-void ReferenceCalcMMFFMultipoleForceKernel::getSystemMultipoleMoments(ContextImpl& context, std::vector< double >& outputMultipoleMoments) {
-
-    // retrieve masses
-
-    const System& system             = context.getSystem();
-    vector<double> masses;
-    for (int i = 0; i <  system.getNumParticles(); ++i) {
-        masses.push_back(system.getParticleMass(i));
-    }    
-
-    MMFFReferenceMultipoleForce* mmffReferenceMultipoleForce = setupMMFFReferenceMultipoleForce(context);
-    vector<Vec3>& posData                                     = extractPositions(context);
-    mmffReferenceMultipoleForce->calculateMMFFSystemMultipoleMoments(masses, posData, charges, dipoles, quadrupoles, tholes,
-                                                                         dampingFactors, polarity, axisTypes, 
-                                                                         multipoleAtomZs, multipoleAtomXs, multipoleAtomYs,
-                                                                         multipoleAtomCovalentInfo, outputMultipoleMoments);
-
-    delete mmffReferenceMultipoleForce;
-}
-
-void ReferenceCalcMMFFMultipoleForceKernel::copyParametersToContext(ContextImpl& context, const MMFFMultipoleForce& force) {
-    if (numMultipoles != force.getNumMultipoles())
-        throw OpenMMException("updateParametersInContext: The number of multipoles has changed");
-
-    // Record the values.
-
-    int dipoleIndex = 0;
-    int quadrupoleIndex = 0;
-    for (int i = 0; i < numMultipoles; ++i) {
-        int axisType, multipoleAtomZ, multipoleAtomX, multipoleAtomY;
-        double charge, tholeD, dampingFactorD, polarityD;
-        std::vector<double> dipolesD;
-        std::vector<double> quadrupolesD;
-        force.getMultipoleParameters(i, charge, dipolesD, quadrupolesD, axisType, multipoleAtomZ, multipoleAtomX, multipoleAtomY, tholeD, dampingFactorD, polarityD);
-        axisTypes[i] = axisType;
-        multipoleAtomZs[i] = multipoleAtomZ;
-        multipoleAtomXs[i] = multipoleAtomX;
-        multipoleAtomYs[i] = multipoleAtomY;
-        charges[i] = charge;
-        tholes[i] = tholeD;
-        dampingFactors[i] = dampingFactorD;
-        polarity[i] = polarityD;
-        dipoles[dipoleIndex++] = dipolesD[0];
-        dipoles[dipoleIndex++] = dipolesD[1];
-        dipoles[dipoleIndex++] = dipolesD[2];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[0];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[1];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[2];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[3];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[4];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[5];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[6];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[7];
-        quadrupoles[quadrupoleIndex++] = quadrupolesD[8];
-    }
-}
-
-void ReferenceCalcMMFFMultipoleForceKernel::getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const {
-    if (!usePme)
-        throw OpenMMException("getPMEParametersInContext: This Context is not using PME");
-    alpha = alphaEwald;
-    nx = pmeGridDimension[0];
-    ny = pmeGridDimension[1];
-    nz = pmeGridDimension[2];
-}
-
-/* -------------------------------------------------------------------------- *
- *                       MMFFGeneralizedKirkwood                            *
- * -------------------------------------------------------------------------- */
-
-ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::ReferenceCalcMMFFGeneralizedKirkwoodForceKernel(std::string name, const Platform& platform, const System& system) : 
-           CalcMMFFGeneralizedKirkwoodForceKernel(name, platform), system(system) {
-}
-
-ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::~ReferenceCalcMMFFGeneralizedKirkwoodForceKernel() {
-}
-
-int ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getNumParticles() const {
-    return numParticles;
-}
-
-int ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getIncludeCavityTerm() const {
-    return includeCavityTerm;
-}
-
-int ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getDirectPolarization() const {
-    return directPolarization;
-}
-
-double ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getSoluteDielectric() const {
-    return soluteDielectric;
-}
-
-double ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getSolventDielectric() const {
-    return solventDielectric;
-}
-
-double ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getDielectricOffset() const {
-    return dielectricOffset;
-}
-
-double ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getProbeRadius() const {
-    return probeRadius;
-}
-
-double ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getSurfaceAreaFactor() const {
-    return surfaceAreaFactor;
-}
-
-void ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getAtomicRadii(vector<double>& outputAtomicRadii) const {
-    outputAtomicRadii.resize(atomicRadii.size());
-    copy(atomicRadii.begin(), atomicRadii.end(), outputAtomicRadii.begin());
-}
-
-void ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getScaleFactors(vector<double>& outputScaleFactors) const {
-    outputScaleFactors.resize(scaleFactors.size());
-    copy(scaleFactors.begin(), scaleFactors.end(), outputScaleFactors.begin());
-}
-
-void ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::getCharges(vector<double>& outputCharges) const {
-    outputCharges.resize(charges.size());
-    copy(charges.begin(), charges.end(), outputCharges.begin());
-}
-
-void ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::initialize(const System& system, const MMFFGeneralizedKirkwoodForce& force) {
-
-    // check that MMFFMultipoleForce is present
-
-    const MMFFMultipoleForce* mmffMultipoleForce = NULL;
-    for (int ii = 0; ii < system.getNumForces() && mmffMultipoleForce == NULL; ii++) {
-        mmffMultipoleForce = dynamic_cast<const MMFFMultipoleForce*>(&system.getForce(ii));
-    }
-
-    if (mmffMultipoleForce == NULL) {
-        throw OpenMMException("MMFFGeneralizedKirkwoodForce requires the System to also contain an MMFFMultipoleForce.");
-    }
-
-    if (mmffMultipoleForce->getNonbondedMethod() != MMFFMultipoleForce::NoCutoff) {
-        throw OpenMMException("MMFFGeneralizedKirkwoodForce requires the MMFFMultipoleForce use the NoCutoff nonbonded method.");
-    }
-
-    numParticles = system.getNumParticles();
-
-    for (int ii = 0; ii < numParticles; ii++) {
-
-        double particleCharge, particleRadius, scalingFactor;
-        force.getParticleParameters(ii, particleCharge, particleRadius, scalingFactor);
-        atomicRadii.push_back(particleRadius);
-        scaleFactors.push_back(scalingFactor);
-        charges.push_back(particleCharge);
-
-        // Make sure the charge matches the one specified by the MMFFMultipoleForce.
-
-        double charge2, thole, damping, polarity;
-        int axisType, atomX, atomY, atomZ;
-        vector<double> dipole, quadrupole;
-        mmffMultipoleForce->getMultipoleParameters(ii, charge2, dipole, quadrupole, axisType, atomZ, atomX, atomY, thole, damping, polarity);
-        if (particleCharge != charge2) {
-            throw OpenMMException("MMFFGeneralizedKirkwoodForce and MMFFMultipoleForce must specify the same charge for every atom.");
-        }
-
-    }   
-    includeCavityTerm  = force.getIncludeCavityTerm();
-    soluteDielectric   = force.getSoluteDielectric();
-    solventDielectric  = force.getSolventDielectric();
-    dielectricOffset   = 0.009;
-    probeRadius        = force.getProbeRadius(), 
-    surfaceAreaFactor  = force.getSurfaceAreaFactor(); 
-    directPolarization = mmffMultipoleForce->getPolarizationType() == MMFFMultipoleForce::Direct ? 1 : 0;
-}
-
-double ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-    // handled in MMFFReferenceGeneralizedKirkwoodMultipoleForce, a derived class of the class MMFFReferenceMultipoleForce
-    return 0.0;
-}
-
-void ReferenceCalcMMFFGeneralizedKirkwoodForceKernel::copyParametersToContext(ContextImpl& context, const MMFFGeneralizedKirkwoodForce& force) {
-    if (numParticles != force.getNumParticles())
-        throw OpenMMException("updateParametersInContext: The number of particles has changed");
-
-    // Record the values.
-
-    for (int i = 0; i < numParticles; ++i) {
-        double particleCharge, particleRadius, scalingFactor;
-        force.getParticleParameters(i, particleCharge, particleRadius, scalingFactor);
-        atomicRadii[i] = particleRadius;
-        scaleFactors[i] = scalingFactor;
-        charges[i] = particleCharge;
-    }
-}
 
 ReferenceCalcMMFFVdwForceKernel::ReferenceCalcMMFFVdwForceKernel(std::string name, const Platform& platform, const System& system) :
        CalcMMFFVdwForceKernel(name, platform), system(system) {
@@ -946,63 +492,166 @@ void ReferenceCalcMMFFVdwForceKernel::copyParametersToContext(ContextImpl& conte
 }
 
 /* -------------------------------------------------------------------------- *
- *                           MMFFWcaDispersion                              *
+ *                           MMFFNonbonded                                    *
  * -------------------------------------------------------------------------- */
 
-ReferenceCalcMMFFWcaDispersionForceKernel::ReferenceCalcMMFFWcaDispersionForceKernel(std::string name, const Platform& platform, const System& system) : 
-           CalcMMFFWcaDispersionForceKernel(name, platform), system(system) {
+ReferenceCalcMMFFNonbondedForceKernel::ReferenceCalcMMFFNonbondedForceKernel(std::string name, const Platform& platform, const System& system) :
+       CalcMMFFNonbondedForceKernel(name, platform), system(system) {
 }
 
-ReferenceCalcMMFFWcaDispersionForceKernel::~ReferenceCalcMMFFWcaDispersionForceKernel() {
+ReferenceCalcMMFFNonbondedForceKernel::~ReferenceCalcMMFFNonbondedForceKernel() {
+    disposeRealArray(particleParamArray, numParticles);
+    disposeIntArray(bonded14IndexArray, num14);
+    disposeRealArray(bonded14ParamArray, num14);
+    if (neighborList != NULL)
+        delete neighborList;
 }
 
-void ReferenceCalcMMFFWcaDispersionForceKernel::initialize(const System& system, const MMFFWcaDispersionForce& force) {
+void ReferenceCalcMMFFNonbondedForceKernel::initialize(const System& system, const MMFFNonbondedForce& force) {
 
-    // per-particle parameters
+    // Identify which exceptions are 1-4 interactions.
 
-    numParticles = system.getNumParticles();
-    radii.resize(numParticles);
-    epsilons.resize(numParticles);
-    for (int ii = 0; ii < numParticles; ii++) {
+    numParticles = force.getNumParticles();
+    exclusions.resize(numParticles);
+    vector<int> nb14s;
+    for (int i = 0; i < force.getNumExceptions(); i++) {
+        int particle1, particle2;
+        double chargeProd, sigma, epsilon;
+        force.getExceptionParameters(i, particle1, particle2, chargeProd, sigma, epsilon);
+        exclusions[particle1].insert(particle2);
+        exclusions[particle2].insert(particle1);
+        if (chargeProd != 0.0 || epsilon != 0.0)
+            nb14s.push_back(i);
+    }
 
-        double radius, epsilon;
-        force.getParticleParameters(ii, radius, epsilon);
+    // Build the arrays.
 
-        radii[ii] = radius;
-        epsilons[ii] = epsilon;
-    }   
-
-    totalMaximumDispersionEnergy = MMFFWcaDispersionForceImpl::getTotalMaximumDispersionEnergy(force);
-
-    epso    = force.getEpso();
-    epsh    = force.getEpsh();
-    rmino   = force.getRmino();
-    rminh   = force.getRminh();
-    awater  = force.getAwater();
-    shctd   = force.getShctd();
-    dispoff = force.getDispoff();
-    slevy   = force.getSlevy();
+    num14 = nb14s.size();
+    bonded14IndexArray = allocateIntArray(num14, 2);
+    bonded14ParamArray = allocateRealArray(num14, 3);
+    particleParamArray = allocateRealArray(numParticles, 4);
+    for (int i = 0; i < numParticles; ++i) {
+        double charge, sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(i, charge, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        particleParamArray[i][0] = sigma;
+        particleParamArray[i][1] = (vdwDA == 'D') ? -G_t_alpha : G_t_alpha;
+        particleParamArray[i][2] = (vdwDA == 'A') ? -alpha_d_N : alpha_d_N;
+        particleParamArray[i][3] = charge;
+    }
+    this->exclusions = exclusions;
+    for (int i = 0; i < num14; ++i) {
+        int particle1, particle2;
+        double chargeProd, sigma, epsilon;
+        force.getExceptionParameters(nb14s[i], particle1, particle2, chargeProd, sigma, epsilon);
+        bonded14IndexArray[i][0] = particle1;
+        bonded14IndexArray[i][1] = particle2;
+        bonded14ParamArray[i][0] = sigma;
+        bonded14ParamArray[i][1] = epsilon;
+        bonded14ParamArray[i][2] = chargeProd;
+    }
+    nonbondedMethod = CalcMMFFNonbondedForceKernel::NonbondedMethod(force.getNonbondedMethod());
+    nonbondedCutoff = force.getCutoffDistance();
+    neighborList = (nonbondedMethod == NoCutoff) ? NULL : new NeighborList();
+    if (nonbondedMethod == Ewald) {
+        double alpha;
+        MMFFNonbondedForceImpl::calcEwaldParameters(system, force, alpha, kmax[0], kmax[1], kmax[2]);
+        ewaldAlpha = alpha;
+    }
+    else if (nonbondedMethod == PME) {
+        double alpha;
+        MMFFNonbondedForceImpl::calcPMEParameters(system, force, alpha, gridSize[0], gridSize[1], gridSize[2], false);
+        ewaldAlpha = alpha;
+    }
+    rfDielectric = force.getReactionFieldDielectric();
+    dispersionCoefficient = force.getUseDispersionCorrection() ? MMFFNonbondedForceImpl::calcDispersionCorrection(system, force) : 0.0;
 }
 
-double ReferenceCalcMMFFWcaDispersionForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+double ReferenceCalcMMFFNonbondedForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy, bool includeDirect, bool includeReciprocal) {
     vector<Vec3>& posData = extractPositions(context);
     vector<Vec3>& forceData = extractForces(context);
-    MMFFReferenceWcaDispersionForce mmffReferenceWcaDispersionForce(epso, epsh, rmino, rminh, awater, shctd, dispoff, slevy);
-    double energy = mmffReferenceWcaDispersionForce.calculateForceAndEnergy(numParticles, posData, radii, epsilons, totalMaximumDispersionEnergy, forceData);
-    return static_cast<double>(energy);
+    double energy = 0;
+    MMFFReferenceNonbondedForce cvdw;
+    bool periodic = (nonbondedMethod == CutoffPeriodic);
+    bool ewald  = (nonbondedMethod == Ewald);
+    bool pme  = (nonbondedMethod == PME);
+    bool isPeriodicEwaldOrPme = periodic || ewald || pme;
+    if (nonbondedMethod != NoCutoff) {
+        computeNeighborListVoxelHash(*neighborList, numParticles, posData, exclusions, extractBoxVectors(context), isPeriodicEwaldOrPme, nonbondedCutoff, 0.0);
+        cvdw.setUseCutoff(nonbondedCutoff, *neighborList, rfDielectric);
+    }
+    if (isPeriodicEwaldOrPme) {
+        Vec3* boxVectors = extractBoxVectors(context);
+        double minAllowedSize = 1.999999*nonbondedCutoff;
+        if (boxVectors[0][0] < minAllowedSize || boxVectors[1][1] < minAllowedSize || boxVectors[2][2] < minAllowedSize)
+            throw OpenMMException("The periodic box size has decreased to less than twice the nonbonded cutoff.");
+        cvdw.setPeriodic(boxVectors);
+    }
+    if (ewald)
+        cvdw.setUseEwald(ewaldAlpha, kmax[0], kmax[1], kmax[2]);
+    if (pme)
+        cvdw.setUsePME(ewaldAlpha, gridSize);
+    cvdw.calculatePairIxn(numParticles, posData, particleParamArray, exclusions, 0, forceData, 0, includeEnergy ? &energy : NULL, includeDirect, includeReciprocal);
+    if (includeDirect) {
+        ReferenceBondForce refBondForce;
+        MMFFReferenceNonbondedForce14 nonbonded14;
+        refBondForce.calculateForce(num14, bonded14IndexArray, posData, bonded14ParamArray, forceData, includeEnergy ? &energy : NULL, nonbonded14);
+        if (isPeriodicEwaldOrPme) {
+            Vec3* boxVectors = extractBoxVectors(context);
+            energy += dispersionCoefficient/(boxVectors[0][0]*boxVectors[1][1]*boxVectors[2][2]);
+        }
+    }
+    return energy;
 }
 
-void ReferenceCalcMMFFWcaDispersionForceKernel::copyParametersToContext(ContextImpl& context, const MMFFWcaDispersionForce& force) {
-    if (numParticles != force.getNumParticles())
+void ReferenceCalcMMFFNonbondedForceKernel::copyParametersToContext(ContextImpl& context, const MMFFNonbondedForce& force) {
+    if (force.getNumParticles() != numParticles)
         throw OpenMMException("updateParametersInContext: The number of particles has changed");
+    vector<int> nb14s;
+    for (int i = 0; i < force.getNumExceptions(); i++) {
+        int particle1, particle2;
+        double chargeProd, sigma, epsilon;
+        force.getExceptionParameters(i, particle1, particle2, chargeProd, sigma, epsilon);
+        if (chargeProd != 0.0 || epsilon != 0.0)
+            nb14s.push_back(i);
+    }
+    if (nb14s.size() != num14)
+        throw OpenMMException("updateParametersInContext: The number of non-excluded exceptions has changed");
 
     // Record the values.
 
     for (int i = 0; i < numParticles; ++i) {
-        double radius, epsilon;
-        force.getParticleParameters(i, radius, epsilon);
-        radii[i] = radius;
-        epsilons[i] = epsilon;
+        double charge, sigma, G_t_alpha, alpha_d_N;
+        char vdwDA;
+        force.getParticleParameters(i, charge, sigma, G_t_alpha, alpha_d_N, vdwDA);
+        particleParamArray[i][0] = sigma;
+        particleParamArray[i][1] = (vdwDA == 'D') ? -G_t_alpha : G_t_alpha;
+        particleParamArray[i][2] = (vdwDA == 'A') ? -alpha_d_N : alpha_d_N;
+        particleParamArray[i][3] = charge;
     }
-    totalMaximumDispersionEnergy = MMFFWcaDispersionForceImpl::getTotalMaximumDispersionEnergy(force);
+    for (int i = 0; i < num14; ++i) {
+        int particle1, particle2;
+        double charge, sigma, epsilon;
+        force.getExceptionParameters(nb14s[i], particle1, particle2, charge, sigma, epsilon);
+        bonded14IndexArray[i][0] = particle1;
+        bonded14IndexArray[i][1] = particle2;
+        bonded14ParamArray[i][0] = sigma;
+        bonded14ParamArray[i][1] = epsilon;
+        bonded14ParamArray[i][2] = charge;
+    }
+    
+    // Recompute the coefficient for the dispersion correction.
+
+    MMFFNonbondedForce::NonbondedMethod method = force.getNonbondedMethod();
+    if (force.getUseDispersionCorrection() && (method == MMFFNonbondedForce::CutoffPeriodic || method == MMFFNonbondedForce::Ewald || method == MMFFNonbondedForce::PME))
+        dispersionCoefficient = MMFFNonbondedForceImpl::calcDispersionCorrection(context.getSystem(), force);
+}
+
+void ReferenceCalcMMFFNonbondedForceKernel::getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const {
+    if (nonbondedMethod != PME)
+        throw OpenMMException("getPMEParametersInContext: This Context is not using PME");
+    alpha = ewaldAlpha;
+    nx = gridSize[0];
+    ny = gridSize[1];
+    nz = gridSize[2];
 }

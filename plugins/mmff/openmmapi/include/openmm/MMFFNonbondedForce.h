@@ -32,22 +32,19 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "Context.h"
-#include "Force.h"
+#include "openmm/Force.h"
 #include <map>
 #include <set>
 #include <utility>
 #include <vector>
-#include "internal/windowsExport.h"
+#include "internal/windowsExportMMFF.h"
 
 namespace OpenMM {
 
 /**
  * This class implements nonbonded interactions between particles, including a Coulomb force to represent
- * electrostatics and a Lennard-Jones force to represent van der Waals interactions.  It optionally supports
- * periodic boundary conditions and cutoffs for long range interactions.  Lennard-Jones interactions are
- * calculated with the Lorentz-Berthelot combining rule: it uses the arithmetic mean of the sigmas and the
- * geometric mean of the epsilons for the two interacting particles.
+ * electrostatics and a 14-7 potential to represent van der Waals interactions.  It optionally supports
+ * periodic boundary conditions and cutoffs for long range interactions.
  *
  * To use this class, create a MMFFNonbondedForce object, then call addParticle() once for each particle in the
  * System to define its parameters.  The number of particles for which you define nonbonded parameters must
@@ -250,38 +247,38 @@ public:
      *
      * In many cases, you can use createExceptionsFromBonds() rather than adding each exception explicitly.
      *
-     * @param particle1  the index of the first particle involved in the interaction
-     * @param particle2  the index of the second particle involved in the interaction
-     * @param chargeProd the scaled product of the atomic charges (i.e. the strength of the Coulomb interaction), measured in units of the proton charge squared
-     * @param sigma      the sigma parameter of the 14-7 potential (corresponding to the van der Waals radius of the particle), measured in nm
-     * @param epsilon    the epsilon parameter of the 14-7 potential (corresponding to the well depth of the van der Waals interaction), measured in kJ/mol
-     * @param replace    determines the behavior if there is already an exception for the same two particles.  If true, the existing one is replaced.  If false,
-     *                   an exception is thrown.
+     * @param particle1    the index of the first particle involved in the interaction
+     * @param particle2    the index of the second particle involved in the interaction
+     * @param chargeProd   the product of particle charges
+     * @param sigma        the combined sigma of the two particles (already scaled if appropriate)
+     * @param epsilon      the combined epsilon of the two particles (already scaled if appropriate)
+     * @param replace      determines the behavior if there is already an exception for the same two particles.  If true, the existing one is replaced.
+     *                     If false, an exception is thrown.
      * @return the index of the exception that was added
      */
     int addException(int particle1, int particle2, double chargeProd, double sigma, double epsilon, bool replace = false);
     /**
-     * Get the force field parameters for an interaction that should be calculated differently from others.
+     * Get the scaling factors for an interaction that should be calculated differently from others.
      *
-     * @param index           the index of the interaction for which to get parameters
-     * @param[out] particle1  the index of the first particle involved in the interaction
-     * @param[out] particle2  the index of the second particle involved in the interaction
-     * @param[out] chargeProd the scaled product of the atomic charges (i.e. the strength of the Coulomb interaction), measured in units of the proton charge squared
-     * @param[out] sigma      the sigma parameter of the 14-7 potential (corresponding to the van der Waals radius of the particle), measured in nm
-     * @param[out] epsilon    the epsilon parameter of the 14-7 potential (corresponding to the well depth of the van der Waals interaction), measured in kJ/mol
+     * @param index             the index of the interaction for which to get parameters
+     * @param[out] particle1    the index of the first particle involved in the interaction
+     * @param[out] particle2    the index of the second particle involved in the interaction
+     * @param[out] chargeProd   the product of particle charges
+     * @param[out] sigma        the combined sigma of the two particles (already scaled if appropriate)
+     * @param[out] epsilon      the combined epsilon of the two particles (already scaled if appropriate)
      */
     void getExceptionParameters(int index, int& particle1, int& particle2, double& chargeProd, double& sigma, double& epsilon) const;
     /**
-     * Set the force field parameters for an interaction that should be calculated differently from others.
+     * Set the scaling factors for an interaction that should be calculated differently from others.
      * If chargeProd and epsilon are both equal to 0, this will cause the interaction to be completely omitted from
      * force and energy calculations.
      *
-     * @param index      the index of the interaction for which to get parameters
-     * @param particle1  the index of the first particle involved in the interaction
-     * @param particle2  the index of the second particle involved in the interaction
-     * @param chargeProd the scaled product of the atomic charges (i.e. the strength of the Coulomb interaction), measured in units of the proton charge squared
-     * @param sigma      the sigma parameter of the 14-7 potential (corresponding to the van der Waals radius of the particle), measured in nm
-     * @param epsilon    the epsilon parameter of the 14-7 potential (corresponding to the well depth of the van der Waals interaction), measured in kJ/mol
+     * @param index        the index of the interaction for which to get parameters
+     * @param particle1    the index of the first particle involved in the interaction
+     * @param particle2    the index of the second particle involved in the interaction
+     * @param chargeProd   the product of particle charges
+     * @param sigma        the combined sigma of the two particles (already scaled if appropriate)
+     * @param epsilon      the combined epsilon of the two particles (already scaled if appropriate)
      */
     void setExceptionParameters(int index, int particle1, int particle2, double chargeProd, double sigma, double epsilon);
     /**
@@ -298,7 +295,7 @@ public:
      */
     void createExceptionsFromBonds(const std::vector<std::pair<int, int> >& bonds, double coulomb14Scale = 0.75, double vdw14Scale = 1.0);
     /**
-     * Get whether to add a contribution to the energy that approximately represents the effect of Lennard-Jones
+     * Get whether to add a contribution to the energy that approximately represents the effect of van der Waals
      * interactions beyond the cutoff distance.  The energy depends on the volume of the periodic box, and is only
      * applicable when periodic boundary conditions are used.  When running simulations at constant pressure, adding
      * this contribution can improve the quality of results.
@@ -307,7 +304,7 @@ public:
         return useDispersionCorrection;
     }
     /**
-     * Set whether to add a contribution to the energy that approximately represents the effect of Lennard-Jones
+     * Set whether to add a contribution to the energy that approximately represents the effect of van der Waals
      * interactions beyond the cutoff distance.  The energy depends on the volume of the periodic box, and is only
      * applicable when periodic boundary conditions are used.  When running simulations at constant pressure, adding
      * this contribution can improve the quality of results.
@@ -356,6 +353,10 @@ public:
                nonbondedMethod == MMFFNonbondedForce::Ewald ||
                nonbondedMethod == MMFFNonbondedForce::PME;
     }
+    static double sigmaCombiningRule(double sigmaI, double sigmaJ, bool haveDonor);
+    static double epsilonCombiningRule(double combinedSigma,
+        double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ);
+    static void scaleSigmaEpsilon(double& combinedSigma, double& combinedEpsilon);
 protected:
     ForceImpl* createImpl() const;
 private:
@@ -365,7 +366,7 @@ private:
     double cutoffDistance, rfDielectric, ewaldErrorTol, alpha, dalpha;
     bool useDispersionCorrection;
     int recipForceGroup, nx, ny, nz, dnx, dny, dnz;
-    void addExclusionsToSet(const std::vector<std::set<int> >& bonded12, std::set<int>& exclusions, int baseParticle, int fromParticle, int currentLevel) const;
+void addExclusionsToSet(const std::vector<std::set<int> >& bonded12, std::set<int>& exclusions, int baseParticle, int fromParticle, int currentLevel) const;
     std::vector<ParticleInfo> particles;
     std::vector<ExceptionInfo> exceptions;
     std::map<std::pair<int, int>, int> exceptionMap;
@@ -399,7 +400,8 @@ public:
     double chargeProd, sigma, epsilon;
     ExceptionInfo() {
         particle1 = particle2 = -1;
-        chargeProd = sigma = epsilon = 0.0;
+        sigma = 1.0;
+        chargeProd = epsilon = 0.0;
     }
     ExceptionInfo(int particle1, int particle2, double chargeProd, double sigma, double epsilon) :
         particle1(particle1), particle2(particle2), chargeProd(chargeProd), sigma(sigma), epsilon(epsilon) {

@@ -44,14 +44,11 @@ public:
      * This is an enumeration of the different methods that may be used for handling long range Vdw forces.
      */
     enum NonbondedMethod {
-
         /**
          * No cutoff is applied to the interactions.  The full set of N^2 interactions is computed exactly.
          * This necessarily means that periodic boundary conditions cannot be used.  This is the default.
          */
-
         NoCutoff = 0,
-
         /**
          * Interactions beyond the cutoff distance are ignored.  
          */

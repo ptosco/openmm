@@ -35,6 +35,7 @@
 #include "openmm/internal/ContextImpl.h"
 #include "openmm/internal/MMFFVdwForceImpl.h"
 #include "openmm/mmffKernels.h"
+#include "openmm/OpenMMException.h"
 #include <map>
 #include <cmath>
 

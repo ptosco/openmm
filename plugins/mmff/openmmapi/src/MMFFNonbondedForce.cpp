@@ -47,6 +47,31 @@ using std::string;
 using std::stringstream;
 using std::vector;
 
+double MMFFNonbondedForce::sigmaCombiningRule(double sigmaI, double sigmaJ, bool haveDonor) {
+    static const double B = 0.2;
+    static const double Beta = 12.0;
+    double gammaIJ = (sigmaI - sigmaJ) / (sigmaI + sigmaJ);
+    double sigma = 0.5 * (sigmaI + sigmaJ) * (1.0 + (haveDonor
+        ? 0.0 : B * (1.0 - exp(-Beta * gammaIJ * gammaIJ))));
+    return sigma;
+}
+
+double MMFFNonbondedForce::epsilonCombiningRule(double combinedSigma,
+    double alpha_d_NI, double alpha_d_NJ, double G_t_alphaI, double G_t_alphaJ) {
+    double combinedSigma2 = combinedSigma * combinedSigma;
+    static const double c = 7.5797344e-4;
+    double epsilon = G_t_alphaI * G_t_alphaJ / ((sqrt(alpha_d_NI) + sqrt(alpha_d_NJ)) *
+        combinedSigma2 * combinedSigma2 * combinedSigma2);
+    return c * epsilon;
+}
+
+void MMFFNonbondedForce::scaleSigmaEpsilon(double &combinedSigma, double &combinedEpsilon) {
+    static const double DARAD = 0.8;
+    static const double DAEPS = 0.5;
+    combinedSigma *= DARAD;
+    combinedEpsilon *= DAEPS;
+}
+
 MMFFNonbondedForce::MMFFNonbondedForce() : nonbondedMethod(NoCutoff), cutoffDistance(1.0), rfDielectric(78.3),
         ewaldErrorTol(5e-4), alpha(0.0), dalpha(0.0), useDispersionCorrection(false), recipForceGroup(-1),
         nx(0), ny(0), nz(0), dnx(0), dny(0), dnz(0) {
@@ -57,7 +82,7 @@ MMFFNonbondedForce::NonbondedMethod MMFFNonbondedForce::getNonbondedMethod() con
 }
 
 void MMFFNonbondedForce::setNonbondedMethod(NonbondedMethod method) {
-    if (method < 0 || method > 5)
+    if (method < 0 || method > 4)
         throw OpenMMException("MMFFNonbondedForce: Illegal value for nonbonded method");
     nonbondedMethod = method;
 }
@@ -203,11 +228,15 @@ void MMFFNonbondedForce::createExceptionsFromBonds(const vector<pair<int, int> >
                     const ParticleInfo& particle1 = particles[j];
                     const ParticleInfo& particle2 = particles[i];
                     const double chargeProd = coulomb14Scale*particle1.charge*particle2.charge;
-                    const double sigma = MMFFReferenceNonbondedForce::_mmffSigmaCombiningRule(
-                        particle1.sigma, particle2.sigma, particle1.vdwDA, particle2.vdwDA);
-                    const double epsilon = vdw14Scale*MMFFReferenceNonbondedForce::_mmffEpsilonCombiningRule(sigma,
-                        particle1.alpha_d_N, particle2.alpha_d_N, particle1.G_t_alpha, particle2.G_t_alpha);
-                    addException(j, i, chargeProd, sigma, epsilon);
+                    bool haveDonor = (particle1.vdwDA == 'D' || particle2.vdwDA == 'D');
+                    bool haveDAPair = (particle1.vdwDA == 'D' && particle2.vdwDA == 'A')
+                        || (particle1.vdwDA == 'A' && particle2.vdwDA == 'D');
+                    double combinedSigma   = sigmaCombiningRule(particle1.sigma, particle2.sigma, haveDonor);
+                    double combinedEpsilon = epsilonCombiningRule(combinedSigma, particle1.alpha_d_N,
+                        particle2.alpha_d_N, particle1.G_t_alpha, particle2.G_t_alpha);
+                    if (haveDAPair)
+                        scaleSigmaEpsilon(combinedSigma, combinedEpsilon);
+                    addException(j, i, chargeProd, combinedSigma, combinedEpsilon);
                 }
                 else {
                     // This interaction should be completely excluded.

@@ -32,7 +32,7 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "ForceImpl.h"
+#include "openmm/internal/ForceImpl.h"
 #include "openmm/MMFFNonbondedForce.h"
 #include "openmm/Kernel.h"
 #include <utility>

@@ -22,57 +22,22 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __ReferenceLJCoulombIxn_H__
-#define __ReferenceLJCoulombIxn_H__
+#ifndef __MMFFReferenceNonbondedForce_H__
+#define __MMFFReferenceNonbondedForce_H__
 
 #include "ReferencePairIxn.h"
 #include "ReferenceNeighborList.h"
 
 namespace OpenMM {
 
-class ReferenceLJCoulombIxn {
-
-   private:
-       
-      bool cutoff;
-      bool useSwitch;
-      bool periodic;
-      bool ewald;
-      bool pme, ljpme;
-      const OpenMM::NeighborList* neighborList;
-      OpenMM::Vec3 periodicBoxVectors[3];
-      double cutoffDistance, switchingDistance;
-      double krf, crf;
-      double alphaEwald, alphaDispersionEwald;
-      int numRx, numRy, numRz;
-      int meshDim[3], dispersionMeshDim[3];
-
-      // parameter indices
-
-      static const int SigIndex = 0;
-      static const int EpsIndex = 1;
-      static const int   QIndex = 2;
-            
-      /**---------------------------------------------------------------------------------------
-      
-         Calculate LJ Coulomb pair ixn between two atoms
-      
-         @param atom1            the index of the first atom
-         @param atom2            the index of the second atom
-         @param atomCoordinates  atom coordinates
-         @param atomParameters   atom parameters (charges, c6, c12, ...)     atomParameters[atomIndex][paramterIndex]
-         @param forces           force array (forces added)
-         @param energyByAtom     atom energy
-         @param totalEnergy      total energy
-            
-         --------------------------------------------------------------------------------------- */
-          
-      void calculateOneIxn(int atom1, int atom2, std::vector<OpenMM::Vec3>& atomCoordinates,
-                           double** atomParameters, std::vector<OpenMM::Vec3>& forces,
-                           double* energyByAtom, double* totalEnergy) const;
-
+class MMFFReferenceNonbondedForce {
 
    public:
+
+      // MMFF vdW constants
+      
+      static const double dhal;
+      static const double ghal;
 
       /**---------------------------------------------------------------------------------------
       
@@ -80,7 +45,7 @@ class ReferenceLJCoulombIxn {
       
          --------------------------------------------------------------------------------------- */
 
-       ReferenceLJCoulombIxn();
+       MMFFReferenceNonbondedForce();
 
       /**---------------------------------------------------------------------------------------
       
@@ -88,7 +53,7 @@ class ReferenceLJCoulombIxn {
       
          --------------------------------------------------------------------------------------- */
 
-       ~ReferenceLJCoulombIxn();
+       ~MMFFReferenceNonbondedForce();
 
       /**---------------------------------------------------------------------------------------
       
@@ -102,16 +67,6 @@ class ReferenceLJCoulombIxn {
       
       void setUseCutoff(double distance, const OpenMM::NeighborList& neighbors, double solventDielectric);
 
-      /**---------------------------------------------------------------------------------------
-      
-         Set the force to use a switching function on the Lennard-Jones interaction.
-      
-         @param distance            the switching distance
-      
-         --------------------------------------------------------------------------------------- */
-      
-      void setUseSwitchingFunction(double distance);
-      
       /**---------------------------------------------------------------------------------------
       
          Set the force to use periodic boundary conditions.  This requires that a cutoff has
@@ -150,23 +105,12 @@ class ReferenceLJCoulombIxn {
       void setUsePME(double alpha, int meshSize[3]);
       
       /**---------------------------------------------------------------------------------------
-
-         Set the force to use Particle-Mesh Ewald (PME) summation for dispersion.
-
-         @param dalpha    the dispersion Ewald separation parameter
-         @param dgridSize the dimensions of the dispersion mesh
-
-         --------------------------------------------------------------------------------------- */
-
-      void setUseLJPME(double dalpha, int dmeshSize[3]);
-
-      /**---------------------------------------------------------------------------------------
       
-         Calculate LJ Coulomb pair ixn
+         Calculate vdW Coulomb pair ixn
       
          @param numberOfAtoms    number of atoms
          @param atomCoordinates  atom coordinates
-         @param atomParameters   atom parameters (charges, c6, c12, ...)     atomParameters[atomIndex][paramterIndex]
+         @param atomParameters   atom parameters (charges, sigma, ...)     atomParameters[atomIndex][parameterIndex]
          @param exclusions       atom exclusion indices
                                  exclusions[atomIndex] contains the list of exclusions for that atom
          @param fixedParameters  non atom parameters (not currently used)
@@ -184,13 +128,50 @@ class ReferenceLJCoulombIxn {
                             double* energyByAtom, double* totalEnergy, bool includeDirect, bool includeReciprocal) const;
 
 private:
+      bool cutoff;
+      bool periodic;
+      bool ewald;
+      bool pme;
+      const OpenMM::NeighborList* neighborList;
+      OpenMM::Vec3 periodicBoxVectors[3];
+      double cutoffDistance;
+      double taperCutoff;
+      double taperCoefficients[3];
+      double krf, crf;
+      double alphaEwald, alphaDispersionEwald;
+      int numRx, numRy, numRz;
+      int meshDim[3], dispersionMeshDim[3];
+
+      // parameter indices
+
+      static const int SigIndex;
+      static const int GtaIndex;
+      static const int adNIndex;
+      static const int   QIndex;
+            
+      // taper coefficient indices
+
+      static const int C3;
+      static const int C4;
+      static const int C5;
+
+      /**---------------------------------------------------------------------------------------
+    
+         Set taper coefficients
+    
+         @param  distance     cutoff distance
+
+       --------------------------------------------------------------------------------------- */
+    
+      void setTaperCoefficients(double distance);
+
       /**---------------------------------------------------------------------------------------
       
          Calculate Ewald ixn
       
          @param numberOfAtoms    number of atoms
          @param atomCoordinates  atom coordinates
-         @param atomParameters   atom parameters (charges, c6, c12, ...)     atomParameters[atomIndex][paramterIndex]
+         @param atomParameters   atom parameters (charges, sigma, ...)     atomParameters[atomIndex][parameterIndex]
          @param exclusions       atom exclusion indices
                                  exclusions[atomIndex] contains the list of exclusions for that atom
          @param fixedParameters  non atom parameters (not currently used)
@@ -206,8 +187,27 @@ private:
                             double** atomParameters, std::vector<std::set<int> >& exclusions,
                             double* fixedParameters, std::vector<OpenMM::Vec3>& forces,
                             double* energyByAtom, double* totalEnergy, bool includeDirect, bool includeReciprocal) const;
+
+      /**---------------------------------------------------------------------------------------
+      
+         Calculate vdW Coulomb pair ixn between two atoms
+      
+         @param atom1            the index of the first atom
+         @param atom2            the index of the second atom
+         @param atomCoordinates  atom coordinates
+         @param atomParameters   atom parameters (charges, sigma, ...)     atomParameters[atomIndex][parameterIndex]
+         @param forces           force array (forces added)
+         @param energyByAtom     atom energy
+         @param totalEnergy      total energy
+            
+         --------------------------------------------------------------------------------------- */
+          
+      void calculateOneIxn(int atom1, int atom2, std::vector<OpenMM::Vec3>& atomCoordinates,
+                           double** atomParameters, std::vector<OpenMM::Vec3>& forces,
+                           double* energyByAtom, double* totalEnergy) const;
+
 };
 
 } // namespace OpenMM
 
-#endif // __ReferenceLJCoulombIxn_H__
+#endif // __MMFFReferenceNonbondedForce_H__

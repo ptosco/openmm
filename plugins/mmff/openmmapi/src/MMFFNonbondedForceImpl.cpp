@@ -34,8 +34,9 @@
 #endif
 #include "openmm/OpenMMException.h"
 #include "openmm/internal/ContextImpl.h"
+#include "openmm/MMFFNonbondedForce.h"
 #include "openmm/internal/MMFFNonbondedForceImpl.h"
-#include "openmm/kernels.h"
+#include "openmm/mmffKernels.h"
 #include <cmath>
 #include <map>
 #include <sstream>
@@ -58,10 +59,6 @@ void MMFFNonbondedForceImpl::initialize(ContextImpl& context) {
     const System& system = context.getSystem();
     if (owner.getNumParticles() != system.getNumParticles())
         throw OpenMMException("MMFFNonbondedForce must have exactly as many particles as the System it belongs to.");
-    if (owner.getUseSwitchingFunction()) {
-        if (owner.getSwitchingDistance() < 0 || owner.getSwitchingDistance() >= owner.getCutoffDistance())
-            throw OpenMMException("MMFFNonbondedForce: Switching distance must satisfy 0 <= r_switch < r_cutoff");
-    }
     vector<set<int> > exceptions(owner.getNumParticles());
     for (int i = 0; i < owner.getNumExceptions(); i++) {
         int particle1, particle2;
@@ -263,11 +260,6 @@ double MMFFNonbondedForceImpl::calcDispersionCorrection(const System& system, co
     double e = 0.0;
     double sigma, epsilon; // The pairwise sigma and epsilon parameters.
     int i = 0, k = 0; // Loop counters.
-    static const double B = 0.2;
-    static const double Beta = 12.0;
-    static const double C4 = 7.5797344e-4;
-    static const double DARAD = 0.8;
-    static const double DAEPS = 0.5;
 
     // Double loop over different atom types.
     for (auto& class1 : classCounts) {
@@ -277,17 +269,11 @@ double MMFFNonbondedForceImpl::calcDispersionCorrection(const System& system, co
             bool haveDAPair = (class1.first.vdwDA == 'D' && class2.first.vdwDA == 'A')
                 || (class1.first.vdwDA == 'A' && class2.first.vdwDA == 'D');
             bool haveDonor = (class1.first.vdwDA == 'D' || class2.first.vdwDA == 'D');
-            double gamma = (class1.first.sigma - class2.first.sigma) / (class1.first.sigma + class2.first.sigma);
-            sigma = 0.5 * (class1.first.sigma + class2.first.sigma) * (1.0 + (haveDonor
-                ? 0.0 : B * (1.0 - exp(-Beta * gamma * gamma))));
-            double sigmaSq = sigma * sigma;
-            epsilon = C4 * class1.first.G_t_alpha * class2.first.G_t_alpha
-                / ((sqrt(class1.first.alpha_d_N) + sqrt(class2.first.alpha_d_N))
-                * sigmaSq * sigmaSq * sigmaSq);
-            if (haveDAPair) {
-              sigma *= DARAD;
-              epsilon *= DAEPS;
-            }
+            sigma = MMFFNonbondedForce::sigmaCombiningRule(class1.first.sigma, class2.first.sigma, haveDonor);
+            epsilon = MMFFNonbondedForce::epsilonCombiningRule(sigma, class1.first.alpha_d_N,
+                class2.first.alpha_d_N, class1.first.G_t_alpha, class2.first.G_t_alpha);
+            if (haveDAPair)
+                MMFFNonbondedForce::scaleSigmaEpsilon(sigma, epsilon);
             int count = class1.second * class2.second;
             // Below is an exact copy of stuff from the previous block.
             double rv = sigma;

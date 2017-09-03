@@ -32,7 +32,7 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.                                     *
  * -------------------------------------------------------------------------- */
 
-#include "openmm/internal/windowsExport.h"
+#include "openmm/internal/windowsExportMMFF.h"
 #include "openmm/serialization/SerializationProxy.h"
 
 namespace OpenMM {
@@ -41,9 +41,9 @@ namespace OpenMM {
  * This is a proxy for serializing NonbondedForce objects.
  */
 
-class OPENMM_EXPORT_MMFF NonbondedForceProxy : public SerializationProxy {
+class OPENMM_EXPORT_MMFF MMFFNonbondedForceProxy : public SerializationProxy {
 public:
-    NonbondedForceProxy();
+    MMFFNonbondedForceProxy();
     void serialize(const void* object, SerializationNode& node) const;
     void* deserialize(const SerializationNode& node) const;
 };

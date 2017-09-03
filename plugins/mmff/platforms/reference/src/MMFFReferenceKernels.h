@@ -29,8 +29,6 @@
 
 #include "openmm/System.h"
 #include "openmm/mmffKernels.h"
-#include "openmm/MMFFMultipoleForce.h"
-#include "MMFFReferenceMultipoleForce.h"
 #include "ReferenceNeighborList.h"
 #include "SimTKOpenMMRealType.h"
 
@@ -256,126 +254,6 @@ private:
 };
 
 /**
- * This kernel is invoked by MMFFMultipoleForce to calculate the forces acting on the system and the energy of the system.
- */
-class ReferenceCalcMMFFMultipoleForceKernel : public CalcMMFFMultipoleForceKernel {
-public:
-    ReferenceCalcMMFFMultipoleForceKernel(std::string name, const Platform& platform, const System& system);
-    ~ReferenceCalcMMFFMultipoleForceKernel();
-    /**
-     * Initialize the kernel.
-     * 
-     * @param system     the System this kernel will be applied to
-     * @param force      the MMFFMultipoleForce this kernel will be used for
-     */
-    void initialize(const System& system, const MMFFMultipoleForce& force);
-    /**
-     * Setup for MMFFReferenceMultipoleForce instance. 
-     *
-     * @param context        the current context
-     *
-     * @return pointer to initialized instance of MMFFReferenceMultipoleForce
-     */
-    MMFFReferenceMultipoleForce* setupMMFFReferenceMultipoleForce(ContextImpl& context);
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
-    /**
-     * Get the induced dipole moments of all particles.
-     * 
-     * @param context    the Context for which to get the induced dipoles
-     * @param dipoles    the induced dipole moment of particle i is stored into the i'th element
-     */
-    void getInducedDipoles(ContextImpl& context, std::vector<Vec3>& dipoles);
-    /**
-     * Get the fixed dipole moments of all particles in the global reference frame.
-     * 
-     * @param context    the Context for which to get the fixed dipoles
-     * @param dipoles    the fixed dipole moment of particle i is stored into the i'th element
-     */
-    void getLabFramePermanentDipoles(ContextImpl& context, std::vector<Vec3>& dipoles);
-    /**
-     * Get the total dipole moments of all particles in the global reference frame.
-     * 
-     * @param context    the Context for which to get the fixed dipoles
-     * @param dipoles    the fixed dipole moment of particle i is stored into the i'th element
-     */
-    void getTotalDipoles(ContextImpl& context, std::vector<Vec3>& dipoles);
-    /** 
-     * Calculate the electrostatic potential given vector of grid coordinates.
-     *
-     * @param context                      context
-     * @param inputGrid                    input grid coordinates
-     * @param outputElectrostaticPotential output potential 
-     */
-    void getElectrostaticPotential(ContextImpl& context, const std::vector< Vec3 >& inputGrid,
-                                   std::vector< double >& outputElectrostaticPotential);
-
-    /**
-     * Get the system multipole moments.
-     *
-     * @param context                context 
-     * @param outputMultipoleMoments vector of multipole moments:
-                                     (charge,
-                                      dipole_x, dipole_y, dipole_z,
-                                      quadrupole_xx, quadrupole_xy, quadrupole_xz,
-                                      quadrupole_yx, quadrupole_yy, quadrupole_yz,
-                                      quadrupole_zx, quadrupole_zy, quadrupole_zz)
-     */
-    void getSystemMultipoleMoments(ContextImpl& context, std::vector< double >& outputMultipoleMoments);
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFMultipoleForce to copy the parameters from
-     */
-    void copyParametersToContext(ContextImpl& context, const MMFFMultipoleForce& force);
-    /**
-     * Get the parameters being used for PME.
-     * 
-     * @param alpha   the separation parameter
-     * @param nx      the number of grid points along the X axis
-     * @param ny      the number of grid points along the Y axis
-     * @param nz      the number of grid points along the Z axis
-     */
-    void getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const;
-
-private:
-
-    int numMultipoles;
-    MMFFMultipoleForce::NonbondedMethod nonbondedMethod;
-    MMFFMultipoleForce::PolarizationType polarizationType;
-    std::vector<double> charges;
-    std::vector<double> dipoles;
-    std::vector<double> quadrupoles;
-    std::vector<double> tholes;
-    std::vector<double> dampingFactors;
-    std::vector<double> polarity;
-    std::vector<int>   axisTypes;
-    std::vector<int>   multipoleAtomZs;
-    std::vector<int>   multipoleAtomXs;
-    std::vector<int>   multipoleAtomYs;
-    std::vector< std::vector< std::vector<int> > > multipoleAtomCovalentInfo;
-
-    int mutualInducedMaxIterations;
-    double mutualInducedTargetEpsilon;
-    std::vector<double> extrapolationCoefficients;
-
-    bool usePme;
-    double alphaEwald;
-    double cutoffDistance;
-    std::vector<int> pmeGridDimension;
-
-    const System& system;
-};
-
-/**
  * This kernel is invoked to calculate the vdw forces acting on the system and the energy of the system.
  */
 class ReferenceCalcMMFFVdwForceKernel : public CalcMMFFVdwForceKernel {
@@ -421,184 +299,55 @@ private:
 };
 
 /**
- * This kernel is invoked to calculate the WCA dispersion forces acting on the system and the energy of the system.
+ * This kernel is invoked by MMFFNonbondedForce to calculate the forces acting on the system.
  */
-class ReferenceCalcMMFFWcaDispersionForceKernel : public CalcMMFFWcaDispersionForceKernel {
+class ReferenceCalcMMFFNonbondedForceKernel : public CalcMMFFNonbondedForceKernel {
 public:
-    ReferenceCalcMMFFWcaDispersionForceKernel(std::string name, const Platform& platform, const System& system);
-    ~ReferenceCalcMMFFWcaDispersionForceKernel();
+    ReferenceCalcMMFFNonbondedForceKernel(std::string name, const Platform& platform, const System& system);
+    ~ReferenceCalcMMFFNonbondedForceKernel();
     /**
      * Initialize the kernel.
      * 
      * @param system     the System this kernel will be applied to
-     * @param force      the MMFFMultipoleForce this kernel will be used for
+     * @param force      the MMFFNonbondedForce this kernel will be used for
      */
-    void initialize(const System& system, const MMFFWcaDispersionForce& force);
+    void initialize(const System& system, const MMFFNonbondedForce& force);
     /**
      * Execute the kernel to calculate the forces and/or energy.
      *
      * @param context        the context in which to execute this kernel
      * @param includeForces  true if forces should be calculated
      * @param includeEnergy  true if the energy should be calculated
+     * @param includeReciprocal  true if reciprocal space interactions should be included
      * @return the potential energy due to the force
      */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
+    double execute(ContextImpl& context, bool includeForces, bool includeEnergy, bool includeDirect, bool includeReciprocal);
     /**
      * Copy changed parameters over to a context.
      *
      * @param context    the context to copy parameters to
-     * @param force      the MMFFWcaDispersionForce to copy the parameters from
+     * @param force      the MMFFNonbondedForce to copy the parameters from
      */
-    void copyParametersToContext(ContextImpl& context, const MMFFWcaDispersionForce& force);
-private:
-
-    int numParticles;
-    std::vector<double> radii;
-    std::vector<double> epsilons;
-    double epso; 
-    double epsh; 
-    double rmino; 
-    double rminh; 
-    double awater; 
-    double shctd; 
-    double dispoff;
-    double slevy;
-    double totalMaximumDispersionEnergy;
-    const System& system;
-};
-
-/**
- * This kernel is invoked to calculate the Gerneralized Kirkwood forces acting on the system and the energy of the system.
- */
-class ReferenceCalcMMFFGeneralizedKirkwoodForceKernel : public CalcMMFFGeneralizedKirkwoodForceKernel {
-public:
-    ReferenceCalcMMFFGeneralizedKirkwoodForceKernel(std::string name, const Platform& platform, const System& system);
-    ~ReferenceCalcMMFFGeneralizedKirkwoodForceKernel();
+    void copyParametersToContext(ContextImpl& context, const MMFFNonbondedForce& force);
     /**
-     * Initialize the kernel.
+     * Get the parameters being used for PME.
      * 
-     * @param system     the System this kernel will be applied to
-     * @param force      the MMFFMultipoleForce this kernel will be used for
+     * @param alpha   the separation parameter
+     * @param nx      the number of grid points along the X axis
+     * @param ny      the number of grid points along the Y axis
+     * @param nz      the number of grid points along the Z axis
      */
-    void initialize(const System& system, const MMFFGeneralizedKirkwoodForce& force);
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
- 
-    /**
-     *  Get the 'include cavity term' flag.
-     *
-     *  @return includeCavityTerm
-     */
-    int getIncludeCavityTerm() const;
-
-    /**
-     *  Get the number of particles.
-     *
-     *  @return number of particles
-     */
-    int getNumParticles() const;
-
-    /**
-     *  Get Direct Polarization flag.
-     *
-     *  @return directPolarization
-     *
-     */
-    int getDirectPolarization() const;
-
-    /**
-     *  Get the solute dielectric.
-     *
-     *  @return soluteDielectric
-     *
-     */
-    double getSoluteDielectric() const;
-
-    /**
-     *  Get the solvent dielectric.
-     *
-     *  @return solventDielectric
-     *
-     */
-    double getSolventDielectric() const;
-
-    /**
-     *  Get the dielectric offset.
-     *
-     *  @return dielectricOffset
-     *
-     */
-    double getDielectricOffset() const;
-
-    /**
-     *  Get the probe radius.
-     *
-     *  @return probeRadius
-     *
-     */
-    double getProbeRadius() const;
-
-    /**
-     *  Get the surface area factor.
-     *
-     *  @return surfaceAreaFactor
-     *
-     */
-    double getSurfaceAreaFactor() const;
-
-    /**
-     *  Get the vector of particle radii.
-     *
-     *  @param atomicRadii vector of atomic radii
-     *
-     */
-    void getAtomicRadii(std::vector<double>& atomicRadii) const;
-
-    /**
-     *  Get the vector of scale factors.
-     *
-     *  @param scaleFactors vector of scale factors
-     *
-     */
-    void getScaleFactors(std::vector<double>& scaleFactors) const;
-
-    /**
-     *  Get the vector of charges.
-     *
-     *  @param charges vector of charges
-     *
-     */
-    void getCharges(std::vector<double>& charges) const;
-
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFGeneralizedKirkwoodForce to copy the parameters from
-     */
-    void copyParametersToContext(ContextImpl& context, const MMFFGeneralizedKirkwoodForce& force);
-
+    void getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const;
 private:
-
-    int numParticles;
-    std::vector<double> atomicRadii;
-    std::vector<double> scaleFactors;
-    std::vector<double> charges;
-    double soluteDielectric;
-    double solventDielectric;
-    double dielectricOffset;
-    double probeRadius;
-    double surfaceAreaFactor;
-    int includeCavityTerm;
-    int directPolarization;
+    int numParticles, num14;
+    int **bonded14IndexArray;
+    double **particleParamArray, **bonded14ParamArray;
+    double nonbondedCutoff, rfDielectric, ewaldAlpha, ewaldDispersionAlpha, dispersionCoefficient;
+    int kmax[3], gridSize[3], dispersionGridSize[3];
+    std::vector<std::set<int> > exclusions;
+    NonbondedMethod nonbondedMethod;
     const System& system;
+    NeighborList* neighborList;
 };
 
 } // namespace OpenMM
