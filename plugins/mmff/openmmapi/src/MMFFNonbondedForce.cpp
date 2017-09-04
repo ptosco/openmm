@@ -73,7 +73,7 @@ void MMFFNonbondedForce::scaleSigmaEpsilon(double &combinedSigma, double &combin
     combinedEpsilon *= DAEPS;
 }
 
-MMFFNonbondedForce::MMFFNonbondedForce() : nonbondedMethod(NoCutoff), cutoffDistance(1.0), rfDielectric(78.3),
+MMFFNonbondedForce::MMFFNonbondedForce() : nonbondedMethod(NoCutoff), cutoffDistance(1.0), rfDielectric(1.0),
         ewaldErrorTol(5e-4), alpha(0.0), dalpha(0.0), useDispersionCorrection(false), recipForceGroup(-1),
         nx(0), ny(0), nz(0), dnx(0), dny(0), dnz(0) {
 }
@@ -225,7 +225,7 @@ void MMFFNonbondedForce::createExceptionsFromBonds(const vector<pair<int, int> >
             if (j < i) {
                 if (bonded13.find(j) == bonded13.end()) {
                     // This is a 1-4 interaction.
-                    std::cerr << "1-4 interaction between particles " << i << " and " << j << std::endl;
+                    //std::cerr << "1-4 interaction between particles " << i << " and " << j << std::endl;
                     const ParticleInfo& particle1 = particles[j];
                     const ParticleInfo& particle2 = particles[i];
                     const double chargeProd = coulomb14Scale*particle1.charge*particle2.charge;

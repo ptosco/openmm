@@ -34,8 +34,9 @@ class MMFFReferenceNonbondedForce {
 
    public:
 
-      // MMFF vdW constants
+      // MMFF constants
       
+      static const double eleBuf;
       static const double dhal;
       static const double ghal;
 

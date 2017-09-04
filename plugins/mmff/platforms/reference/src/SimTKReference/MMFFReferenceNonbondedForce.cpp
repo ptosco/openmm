@@ -43,21 +43,22 @@ using std::set;
 using std::vector;
 using namespace OpenMM;
 
-const int MMFFReferenceNonbondedForce::SigIndex = 0;
-const int MMFFReferenceNonbondedForce::GtaIndex = 1;
-const int MMFFReferenceNonbondedForce::adNIndex = 2;
-const int   MMFFReferenceNonbondedForce::QIndex = 3;
+const int MMFFReferenceNonbondedForce::SigIndex  = 0;
+const int MMFFReferenceNonbondedForce::GtaIndex  = 1;
+const int MMFFReferenceNonbondedForce::adNIndex  = 2;
+const int   MMFFReferenceNonbondedForce::QIndex  = 3;
 
-// MMFF vdW constants
+// MMFF constants
 
-const double MMFFReferenceNonbondedForce::dhal  = 0.07;
-const double MMFFReferenceNonbondedForce::ghal  = 0.12;
+const double MMFFReferenceNonbondedForce::eleBuf = 0.005;
+const double MMFFReferenceNonbondedForce::dhal   = 0.07;
+const double MMFFReferenceNonbondedForce::ghal   = 0.12;
 
 // taper coefficient indices
 
-const int MMFFReferenceNonbondedForce::C3 =       0;
-const int MMFFReferenceNonbondedForce::C4 =       1;
-const int MMFFReferenceNonbondedForce::C5 =       2;
+const int MMFFReferenceNonbondedForce::C3        = 0;
+const int MMFFReferenceNonbondedForce::C4        = 1;
+const int MMFFReferenceNonbondedForce::C5        = 2;
 
 /**---------------------------------------------------------------------------------------
 
@@ -369,12 +370,14 @@ void MMFFReferenceNonbondedForce::calculateEwaldIxn(int numberOfAtoms, vector<Ve
 
         double deltaR[2][ReferenceForce::LastDeltaRIndex];
         ReferenceForce::getDeltaRPeriodic(atomCoordinates[jj], atomCoordinates[ii], periodicBoxVectors, deltaR[0]);
-        double r_ij      = deltaR[0][ReferenceForce::RIndex];
-        double inverseR  = 1.0/(deltaR[0][ReferenceForce::RIndex]);
-        double alphaR    = alphaEwald * r_ij;
+        double r_ij        = deltaR[0][ReferenceForce::RIndex];
+        double rBuf        = r_ij + eleBuf;
+        double inverseR    = 1.0/r_ij;
+        double inverseRbuf = 1.0/rBuf;
+        double alphaR      = alphaEwald * rBuf;
 
 
-        double dEdR = ONE_4PI_EPS0 * atomParameters[ii][QIndex] * atomParameters[jj][QIndex] * inverseR * inverseR * inverseR;
+        double dEdR = ONE_4PI_EPS0 * atomParameters[ii][QIndex] * atomParameters[jj][QIndex] * inverseRbuf * inverseRbuf * inverseRbuf;
         dEdR = dEdR * (erfc(alphaR) + 2 * alphaR * exp (- alphaR * alphaR) / SQRT_PI);
 
         bool haveDonor = (atomParameters[ii][GtaIndex] < 0.0 || atomParameters[jj][GtaIndex] < 0.0);
@@ -428,7 +431,7 @@ void MMFFReferenceNonbondedForce::calculateEwaldIxn(int numberOfAtoms, vector<Ve
 
         // accumulate energies
 
-        realSpaceEwaldEnergy        = ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseR*erfc(alphaR);
+        realSpaceEwaldEnergy        = ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseRbuf*erfc(alphaR);
 
         totalVdwEnergy             += vdwEnergy;
         totalRealSpaceEwaldEnergy  += realSpaceEwaldEnergy;
@@ -455,11 +458,11 @@ void MMFFReferenceNonbondedForce::calculateEwaldIxn(int numberOfAtoms, vector<Ve
 
                 double deltaR[2][ReferenceForce::LastDeltaRIndex];
                 ReferenceForce::getDeltaR(atomCoordinates[jj], atomCoordinates[ii], deltaR[0]);
-                double r         = deltaR[0][ReferenceForce::RIndex];
-                double inverseR  = 1.0/(deltaR[0][ReferenceForce::RIndex]);
-                double alphaR    = alphaEwald * r;
+                double rBuf         = deltaR[0][ReferenceForce::RIndex] + eleBuf;
+                double inverseRbuf  = 1.0/rBuf;
+                double alphaR       = alphaEwald * rBuf;
                 if (erf(alphaR) > 1e-6) {
-                    double dEdR = ONE_4PI_EPS0 * atomParameters[ii][QIndex] * atomParameters[jj][QIndex] * inverseR * inverseR * inverseR;
+                    double dEdR = ONE_4PI_EPS0 * atomParameters[ii][QIndex] * atomParameters[jj][QIndex] * inverseRbuf * inverseRbuf * inverseRbuf;
                     dEdR = dEdR * (erf(alphaR) - 2 * alphaR * exp (- alphaR * alphaR) / SQRT_PI);
 
                     // accumulate forces
@@ -472,7 +475,7 @@ void MMFFReferenceNonbondedForce::calculateEwaldIxn(int numberOfAtoms, vector<Ve
 
                     // accumulate energies
 
-                    realSpaceEwaldEnergy = ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseR*erf(alphaR);
+                    realSpaceEwaldEnergy = ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseRbuf*erf(alphaR);
                 }
                 else {
                     realSpaceEwaldEnergy = alphaEwald*TWO_OVER_SQRT_PI*ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex];
@@ -563,8 +566,8 @@ void MMFFReferenceNonbondedForce::calculateOneIxn(int ii, int jj, vector<Vec3>& 
         ReferenceForce::getDeltaR(atomCoordinates[jj], atomCoordinates[ii], deltaR[0]);
 
     bool haveDonor = (atomParameters[ii][GtaIndex] < 0.0 || atomParameters[jj][GtaIndex] < 0.0);
-    bool haveDAPair = (atomParameters[ii][GtaIndex] < 0.0f && atomParameters[jj][adNIndex] < 0.0f)
-        || (atomParameters[ii][adNIndex] < 0.0f && atomParameters[jj][GtaIndex] < 0.0f);
+    bool haveDAPair = (atomParameters[ii][GtaIndex] < 0.0 && atomParameters[jj][adNIndex] < 0.0)
+        || (atomParameters[ii][adNIndex] < 0.0 && atomParameters[jj][GtaIndex] < 0.0);
     double combinedSigma   = MMFFNonbondedForce::sigmaCombiningRule(atomParameters[ii][SigIndex], atomParameters[jj][SigIndex], haveDonor);
     double combinedEpsilon = MMFFNonbondedForce::epsilonCombiningRule(combinedSigma, fabs(atomParameters[ii][adNIndex]),
         fabs(atomParameters[jj][adNIndex]), fabs(atomParameters[ii][GtaIndex]), fabs(atomParameters[jj][GtaIndex]));
@@ -572,6 +575,8 @@ void MMFFReferenceNonbondedForce::calculateOneIxn(int ii, int jj, vector<Vec3>& 
         MMFFNonbondedForce::scaleSigmaEpsilon(combinedSigma, combinedEpsilon);
     double inverseR     = 1.0/(deltaR[0][ReferenceForce::RIndex]);
     double r_ij         = deltaR[0][ReferenceForce::RIndex];
+    double rBuf         = deltaR[0][ReferenceForce::RIndex] + eleBuf;
+    double inverseRbuf  = 1.0/rBuf;
     double r_ij_2       = deltaR[0][ReferenceForce::R2Index];
     double sigma_7      = combinedSigma*combinedSigma*combinedSigma;
            sigma_7      = sigma_7*sigma_7*combinedSigma;
@@ -604,9 +609,10 @@ void MMFFReferenceNonbondedForce::calculateOneIxn(int ii, int jj, vector<Vec3>& 
     }
 
     double coulomb_dEdR = cutoff
-        ? ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*(inverseR-2.0f*krf*r_ij_2)
-        : ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseR;
-    dEdR = (dEdR + coulomb_dEdR*inverseR)*inverseR;
+        ? ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*(inverseRbuf-2.0*krf*rBuf*rBuf)
+        : ONE_4PI_EPS0*atomParameters[ii][QIndex]*atomParameters[jj][QIndex]*inverseRbuf;
+    energy += coulomb_dEdR;
+    dEdR = dEdR*inverseR + coulomb_dEdR*inverseRbuf*inverseRbuf;
 
     // accumulate forces
 
