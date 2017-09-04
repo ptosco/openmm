@@ -1172,7 +1172,7 @@ void CudaCalcMMFFNonbondedForceKernel::initialize(const System& system, const MM
     if (numExceptions > 0) {
         exceptionAtoms.resize(numExceptions);
         vector<vector<int> > atoms(numExceptions, vector<int>(2));
-        exceptionParams = CudaArray::create<float4>(cu, numExceptions, "exceptionParams");
+        exceptionParams = CudaArray::create<float3>(cu, numExceptions, "exceptionParams");
         vector<float3> exceptionParamsVector(numExceptions);
         for (int i = 0; i < numExceptions; i++) {
             double chargeProd, sigma, epsilon;

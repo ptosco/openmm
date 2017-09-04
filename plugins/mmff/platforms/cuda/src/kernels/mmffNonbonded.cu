@@ -78,7 +78,7 @@
             real gTau = epsilon*tau7*r6*1.12f*tmp*tmp;
             real vdwEnergy = epsilon*sigma7*tau7*((sigma7*1.12f*invRho)-2.0f);
             real deltaE = -7.0f*(dTau*vdwEnergy+gTau);
-        #ifdef USE_VDW_SWITCH
+        #if USE_VDW_SWITCH
             if (r > VDW_SWITCH_CUTOFF) {
                 real x = r-VDW_SWITCH_CUTOFF;
                 real taper = 1+x*x*x*(VDW_SWITCH_C3+x*(VDW_SWITCH_C4+x*VDW_SWITCH_C5));
@@ -150,7 +150,7 @@
         real gTau = epsilon*tau7*r6*1.12f*tmp*tmp;
         real vdwEnergy = epsilon*sigma7*tau7*((sigma7*1.12f*invRho)-2.0f);
         real deltaE = -7.0f*(dTau*vdwEnergy+gTau);
-      #ifdef USE_VDW_SWITCH
+      #if USE_VDW_SWITCH
         if (r > VDW_SWITCH_CUTOFF) {
             real x = r-VDW_SWITCH_CUTOFF;
             real taper = 1+x*x*x*(VDW_SWITCH_C3+x*(VDW_SWITCH_C4+x*VDW_SWITCH_C5));

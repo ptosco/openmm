@@ -360,13 +360,13 @@ public:
 protected:
     ForceImpl* createImpl() const;
 private:
+    void addExclusionsToSet(const std::vector<std::set<int> >& bonded12, std::set<int>& exclusions, int baseParticle, int fromParticle, int currentLevel) const;
     class ParticleInfo;
     class ExceptionInfo;
     NonbondedMethod nonbondedMethod;
     double cutoffDistance, rfDielectric, ewaldErrorTol, alpha, dalpha;
     bool useDispersionCorrection;
     int recipForceGroup, nx, ny, nz, dnx, dny, dnz;
-void addExclusionsToSet(const std::vector<std::set<int> >& bonded12, std::set<int>& exclusions, int baseParticle, int fromParticle, int currentLevel) const;
     std::vector<ParticleInfo> particles;
     std::vector<ExceptionInfo> exceptions;
     std::map<std::pair<int, int>, int> exceptionMap;

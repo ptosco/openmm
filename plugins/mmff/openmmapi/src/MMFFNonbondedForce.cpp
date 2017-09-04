@@ -38,6 +38,7 @@
 #include <map>
 #include <sstream>
 #include <utility>
+#include <iostream>
 
 using namespace OpenMM;
 using std::map;
@@ -224,7 +225,7 @@ void MMFFNonbondedForce::createExceptionsFromBonds(const vector<pair<int, int> >
             if (j < i) {
                 if (bonded13.find(j) == bonded13.end()) {
                     // This is a 1-4 interaction.
-
+                    std::cerr << "1-4 interaction between particles " << i << " and " << j << std::endl;
                     const ParticleInfo& particle1 = particles[j];
                     const ParticleInfo& particle2 = particles[i];
                     const double chargeProd = coulomb14Scale*particle1.charge*particle2.charge;
@@ -232,7 +233,7 @@ void MMFFNonbondedForce::createExceptionsFromBonds(const vector<pair<int, int> >
                     bool haveDAPair = (particle1.vdwDA == 'D' && particle2.vdwDA == 'A')
                         || (particle1.vdwDA == 'A' && particle2.vdwDA == 'D');
                     double combinedSigma   = sigmaCombiningRule(particle1.sigma, particle2.sigma, haveDonor);
-                    double combinedEpsilon = epsilonCombiningRule(combinedSigma, particle1.alpha_d_N,
+                    double combinedEpsilon = vdw14Scale*epsilonCombiningRule(combinedSigma, particle1.alpha_d_N,
                         particle2.alpha_d_N, particle1.G_t_alpha, particle2.G_t_alpha);
                     if (haveDAPair)
                         scaleSigmaEpsilon(combinedSigma, combinedEpsilon);
