@@ -254,51 +254,6 @@ private:
 };
 
 /**
- * This kernel is invoked to calculate the vdw forces acting on the system and the energy of the system.
- */
-class ReferenceCalcMMFFVdwForceKernel : public CalcMMFFVdwForceKernel {
-public:
-    ReferenceCalcMMFFVdwForceKernel(std::string name, const Platform& platform, const System& system);
-    ~ReferenceCalcMMFFVdwForceKernel();
-    /**
-     * Initialize the kernel.
-     * 
-     * @param system     the System this kernel will be applied to
-     * @param force      the MMFFVdwForce this kernel will be used for
-     */
-    void initialize(const System& system, const MMFFVdwForce& force);
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFVdwForce to copy the parameters from
-     */
-    void copyParametersToContext(ContextImpl& context, const MMFFVdwForce& force);
-private:
-    int numParticles;
-    int useCutoff;
-    int usePBC;
-    double cutoff;
-    double dispersionCoefficient;
-    std::vector< std::set<int> > allExclusions;
-    std::vector<double> sigmas;
-    std::vector<double> G_t_alphas;
-    std::vector<double> alpha_d_Ns;
-    std::vector<char> vdwDAs;
-    const System& system;
-    NeighborList* neighborList;
-};
-
-/**
  * This kernel is invoked by MMFFNonbondedForce to calculate the forces acting on the system.
  */
 class ReferenceCalcMMFFNonbondedForceKernel : public CalcMMFFNonbondedForceKernel {

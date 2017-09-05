@@ -233,46 +233,6 @@ private:
 };
 
 /**
- * This kernel is invoked to calculate the vdw forces acting on the system and the energy of the system.
- */
-class CudaCalcMMFFVdwForceKernel : public CalcMMFFVdwForceKernel {
-public:
-    CudaCalcMMFFVdwForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system);
-    ~CudaCalcMMFFVdwForceKernel();
-    /**
-     * Initialize the kernel.
-     * 
-     * @param system     the System this kernel will be applied to
-     * @param force      the MMFFMultipoleForce this kernel will be used for
-     */
-    void initialize(const System& system, const MMFFVdwForce& force);
-    /**
-     * Execute the kernel to calculate the forces and/or energy.
-     *
-     * @param context        the context in which to execute this kernel
-     * @param includeForces  true if forces should be calculated
-     * @param includeEnergy  true if the energy should be calculated
-     * @return the potential energy due to the force
-     */
-    double execute(ContextImpl& context, bool includeForces, bool includeEnergy);
-    /**
-     * Copy changed parameters over to a context.
-     *
-     * @param context    the context to copy parameters to
-     * @param force      the MMFFVdwForce to copy the parameters from
-     */
-    void copyParametersToContext(ContextImpl& context, const MMFFVdwForce& force);
-private:
-    class ForceInfo;
-    CudaContext& cu;
-    const System& system;
-    bool hasInitializedNonbonded;
-    double dispersionCoefficient;
-    CudaArray* params;
-    CudaNonbondedUtilities* nonbonded;
-};
-
-/**
  * This kernel is invoked by MMFFNonbondedForce to calculate the forces acting on the system.
  */
 class CudaCalcMMFFNonbondedForceKernel : public CalcMMFFNonbondedForceKernel {

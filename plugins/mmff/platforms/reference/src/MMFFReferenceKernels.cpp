@@ -31,12 +31,10 @@
 #include "MMFFReferenceTorsionForce.h"
 #include "MMFFReferenceStretchBendForce.h"
 #include "MMFFReferenceOutOfPlaneBendForce.h"
-#include "MMFFReferenceVdwForce.h"
 #include "MMFFReferenceNonbondedForce.h"
 #include "MMFFReferenceNonbondedForce14.h"
 #include "ReferencePlatform.h"
 #include "openmm/internal/ContextImpl.h"
-#include "openmm/internal/MMFFVdwForceImpl.h"
 #include "openmm/MMFFNonbondedForce.h"
 #include "openmm/internal/MMFFNonbondedForceImpl.h"
 #include "openmm/OpenMMException.h"
@@ -386,108 +384,6 @@ void ReferenceCalcMMFFOutOfPlaneBendForceKernel::copyParametersToContext(Context
         if (particle1Index != particle1[i] || particle2Index != particle2[i] || particle3Index != particle3[i] || particle4Index != particle4[i])
             throw OpenMMException("updateParametersInContext: The set of particles in an out-of-plane bend has changed");
         kParameters[i] = k;
-    }
-}
-
-/* -------------------------------------------------------------------------- *
- *                           MMFFVdw                                          *
- * -------------------------------------------------------------------------- */
-
-ReferenceCalcMMFFVdwForceKernel::ReferenceCalcMMFFVdwForceKernel(std::string name, const Platform& platform, const System& system) :
-       CalcMMFFVdwForceKernel(name, platform), system(system) {
-    useCutoff = 0;
-    usePBC = 0;
-    cutoff = 1.0e+10;
-    neighborList = NULL;
-}
-
-ReferenceCalcMMFFVdwForceKernel::~ReferenceCalcMMFFVdwForceKernel() {
-    if (neighborList) {
-        delete neighborList;
-    } 
-}
-
-void ReferenceCalcMMFFVdwForceKernel::initialize(const System& system, const MMFFVdwForce& force) {
-
-    // per-particle parameters
-
-    numParticles = system.getNumParticles();
-
-    allExclusions.resize(numParticles);
-    sigmas.resize(numParticles);
-    G_t_alphas.resize(numParticles);
-    alpha_d_Ns.resize(numParticles);
-    vdwDAs.resize(numParticles);
-
-    for (int ii = 0; ii < numParticles; ii++) {
-
-        int indexIV;
-        double sigma, G_t_alpha, alpha_d_N;
-        char vdwDA;
-        std::vector<int> exclusions;
-
-        force.getParticleParameters(ii, sigma, G_t_alpha, alpha_d_N, vdwDA);
-        force.getParticleExclusions(ii, exclusions);
-        for (unsigned int jj = 0; jj < exclusions.size(); jj++) {
-           allExclusions[ii].insert(exclusions[jj]);
-        }
-
-        sigmas[ii]        = sigma;
-        G_t_alphas[ii]    = G_t_alpha;
-        alpha_d_Ns[ii]    = alpha_d_N;
-        vdwDAs[ii]        = vdwDA;
-    }   
-    useCutoff              = (force.getNonbondedMethod() != MMFFVdwForce::NoCutoff);
-    usePBC                 = (force.getNonbondedMethod() == MMFFVdwForce::CutoffPeriodic);
-    cutoff                 = force.getCutoffDistance();
-    neighborList           = useCutoff ? new NeighborList() : NULL;
-    dispersionCoefficient  = force.getUseDispersionCorrection() ?  MMFFVdwForceImpl::calcDispersionCorrection(system, force) : 0.0;
-
-}
-
-double ReferenceCalcMMFFVdwForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-
-    vector<Vec3>& posData   = extractPositions(context);
-    vector<Vec3>& forceData = extractForces(context);
-    MMFFReferenceVdwForce vdwForce;
-    double energy;
-    if (useCutoff) {
-        vdwForce.setCutoff(cutoff);
-        computeNeighborListVoxelHash(*neighborList, numParticles, posData, allExclusions, extractBoxVectors(context), usePBC, cutoff, 0.0);
-        if (usePBC) {
-            vdwForce.setNonbondedMethod(MMFFReferenceVdwForce::CutoffPeriodic);
-            Vec3* boxVectors = extractBoxVectors(context);
-            double minAllowedSize = 1.999999*cutoff;
-            if (boxVectors[0][0] < minAllowedSize || boxVectors[1][1] < minAllowedSize || boxVectors[2][2] < minAllowedSize) {
-                throw OpenMMException("The periodic box size has decreased to less than twice the cutoff.");
-            }
-            vdwForce.setPeriodicBox(boxVectors);
-            energy  = vdwForce.calculateForceAndEnergy(numParticles, posData, sigmas, G_t_alphas, alpha_d_Ns, vdwDAs, *neighborList, forceData);
-            energy += dispersionCoefficient/(boxVectors[0][0]*boxVectors[1][1]*boxVectors[2][2]);
-        } else {
-            vdwForce.setNonbondedMethod(MMFFReferenceVdwForce::CutoffNonPeriodic);
-        }
-    } else {
-        vdwForce.setNonbondedMethod(MMFFReferenceVdwForce::NoCutoff);
-        energy = vdwForce.calculateForceAndEnergy(numParticles, posData, sigmas, G_t_alphas, alpha_d_Ns, vdwDAs, allExclusions, forceData);
-    }
-    return static_cast<double>(energy);
-}
-
-void ReferenceCalcMMFFVdwForceKernel::copyParametersToContext(ContextImpl& context, const MMFFVdwForce& force) {
-    if (numParticles != force.getNumParticles())
-        throw OpenMMException("updateParametersInContext: The number of particles has changed");
-
-    // Record the values.
-
-    for (int i = 0; i < numParticles; ++i) {
-        double sigma, G_t_alpha, alpha_d_N;
-        char vdwDA;
-        force.getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
-        sigmas[i] = sigma;
-        G_t_alphas[i] = G_t_alpha;
-        alpha_d_Ns[i] = alpha_d_N;
-        vdwDAs[i]= vdwDA;
     }
 }
 

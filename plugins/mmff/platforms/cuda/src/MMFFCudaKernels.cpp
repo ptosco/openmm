@@ -30,7 +30,6 @@
 #include "MMFFCudaKernels.h"
 #include "CudaMMFFKernelSources.h"
 #include "openmm/internal/ContextImpl.h"
-#include "openmm/internal/MMFFVdwForceImpl.h"
 #include "openmm/internal/MMFFNonbondedForceImpl.h"
 #include "CudaBondedUtilities.h"
 #include "CudaFFT3D.h"
@@ -554,124 +553,6 @@ void CudaCalcMMFFOutOfPlaneBendForceKernel::copyParametersToContext(ContextImpl&
     
     // Mark that the current reordering may be invalid.
     
-    cu.invalidateMolecules();
-}
-
-/* -------------------------------------------------------------------------- *
- *                           MMFFVdw                                        *
- * -------------------------------------------------------------------------- */
-
-class CudaCalcMMFFVdwForceKernel::ForceInfo : public CudaForceInfo {
-public:
-    ForceInfo(const MMFFVdwForce& force) : force(force) {
-    }
-    bool areParticlesIdentical(int particle1, int particle2) {
-        double sigma1, sigma2, G_t_alpha1, G_t_alpha2, alpha_d_N1, alpha_d_N2;
-        char vdwDA1, vdwDA2;
-        force.getParticleParameters(particle1, sigma1, G_t_alpha1, alpha_d_N1, vdwDA1);
-        force.getParticleParameters(particle2, sigma2, G_t_alpha2, alpha_d_N2, vdwDA2);
-        return (sigma1 == sigma2 && G_t_alpha1 == G_t_alpha2 && alpha_d_N1 == alpha_d_N2 && vdwDA1 == vdwDA2);
-    }
-private:
-    const MMFFVdwForce& force;
-};
-
-CudaCalcMMFFVdwForceKernel::CudaCalcMMFFVdwForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) :
-        CalcMMFFVdwForceKernel(name, platform), cu(cu), system(system), hasInitializedNonbonded(false), params(NULL), nonbonded(NULL) {
-}
-
-CudaCalcMMFFVdwForceKernel::~CudaCalcMMFFVdwForceKernel() {
-    cu.setAsCurrent();
-    if (params != NULL)
-        delete params;
-    if (nonbonded != NULL)
-        delete nonbonded;
-}
-
-void CudaCalcMMFFVdwForceKernel::initialize(const System& system, const MMFFVdwForce& force) {
-    cu.setAsCurrent();
-    params = CudaArray::create<float3>(cu, cu.getPaddedNumAtoms(), "params");
-    
-    // Record atom parameters.
-    
-    vector<float3> paramsVec(cu.getPaddedNumAtoms());
-    vector<vector<int> > exclusions(cu.getNumAtoms());
-    for (int i = 0; i < force.getNumParticles(); i++) {
-        double sigma, G_t_alpha, alpha_d_N;
-        char vdwDA;
-        force.getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
-        // if vdwDA == 'D', G_t_alpha is negative
-        // if vdwDA == 'A', alpha_d_N is negative
-        paramsVec[i] = make_float3((float) sigma, (float) (vdwDA == 'D' ? -G_t_alpha : G_t_alpha),
-            (float) (vdwDA == 'A' ? -alpha_d_N : alpha_d_N));
-        force.getParticleExclusions(i, exclusions[i]);
-        exclusions[i].push_back(i);
-    }
-    params->upload(paramsVec);
-    if (force.getUseDispersionCorrection())
-        dispersionCoefficient = MMFFVdwForceImpl::calcDispersionCorrection(system, force);
-    else
-        dispersionCoefficient = 0.0;               
- 
-    // This force is applied based on modified atom positions, where hydrogens have been moved slightly
-    // closer to their parent atoms.  We therefore create a separate CudaNonbondedUtilities just for
-    // this force, so it will have its own neighbor list and interaction kernel.
-    
-    nonbonded = new CudaNonbondedUtilities(cu);
-    nonbonded->addParameter(CudaNonbondedUtilities::ParameterInfo("params", "float", 3, sizeof(float3), params->getDevicePointer()));
-    
-    // Create the interaction kernel.
-    
-    map<string, string> replacements;
-    double cutoff = force.getCutoffDistance();
-    double taperCutoff = cutoff*0.9;
-    replacements["CUTOFF_DISTANCE"] = cu.doubleToString(force.getCutoffDistance());
-    replacements["TAPER_CUTOFF"] = cu.doubleToString(taperCutoff);
-    replacements["TAPER_C3"] = cu.doubleToString(10/pow(taperCutoff-cutoff, 3.0));
-    replacements["TAPER_C4"] = cu.doubleToString(15/pow(taperCutoff-cutoff, 4.0));
-    replacements["TAPER_C5"] = cu.doubleToString(6/pow(taperCutoff-cutoff, 5.0));
-    bool useCutoff = (force.getNonbondedMethod() != MMFFVdwForce::NoCutoff);
-    nonbonded->addInteraction(useCutoff, useCutoff, true, force.getCutoffDistance(), exclusions,
-        cu.replaceStrings(CudaMMFFKernelSources::mmffVdwForce, replacements), 0);
-    
-    cu.addForce(new ForceInfo(force));
-}
-
-double CudaCalcMMFFVdwForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
-    if (!hasInitializedNonbonded) {
-        hasInitializedNonbonded = true;
-        nonbonded->initialize(system);
-    }
-    nonbonded->prepareInteractions(1);
-    nonbonded->computeInteractions(1, includeForces, includeEnergy);
-    double4 box = cu.getPeriodicBoxSize();
-    return dispersionCoefficient/(box.x*box.y*box.z);
-}
-
-void CudaCalcMMFFVdwForceKernel::copyParametersToContext(ContextImpl& context, const MMFFVdwForce& force) {
-    // Make sure the new parameters are acceptable.
-    
-    cu.setAsCurrent();
-    if (force.getNumParticles() != cu.getNumAtoms())
-        throw OpenMMException("updateParametersInContext: The number of particles has changed");
-    
-    // Record the per-particle parameters.
-    
-    vector<float3> paramsVec(cu.getPaddedNumAtoms());
-    for (int i = 0; i < force.getNumParticles(); i++) {
-        double sigma, G_t_alpha, alpha_d_N;
-        char vdwDA;
-        force.getParticleParameters(i, sigma, G_t_alpha, alpha_d_N, vdwDA);
-        // if vdwDA == 'D', G_t_alpha is negative
-        // if vdwDA == 'A', alpha_d_N is negative
-        paramsVec[i] = make_float3((float) sigma, (float) (vdwDA == 'D' ? -G_t_alpha : G_t_alpha),
-            (float) (vdwDA == 'A' ? -alpha_d_N : alpha_d_N));
-    }
-    params->upload(paramsVec);
-    if (force.getUseDispersionCorrection())
-        dispersionCoefficient = MMFFVdwForceImpl::calcDispersionCorrection(system, force);
-    else
-        dispersionCoefficient = 0.0;               
     cu.invalidateMolecules();
 }
 

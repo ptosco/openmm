@@ -45,7 +45,6 @@
 #include "openmm/MMFFTorsionForce.h"
 #include "openmm/MMFFStretchBendForce.h"
 #include "openmm/MMFFOutOfPlaneBendForce.h"
-#include "openmm/MMFFVdwForce.h"
 #include "openmm/MMFFNonbondedForce.h"
 
 #include "openmm/serialization/SerializationProxy.h"
@@ -55,7 +54,6 @@
 #include "openmm/serialization/MMFFTorsionForceProxy.h"
 #include "openmm/serialization/MMFFStretchBendForceProxy.h"
 #include "openmm/serialization/MMFFOutOfPlaneBendForceProxy.h"
-#include "openmm/serialization/MMFFVdwForceProxy.h"
 #include "openmm/serialization/MMFFNonbondedForceProxy.h"
 
 #if defined(WIN32)
@@ -78,6 +76,5 @@ extern "C" OPENMM_EXPORT_MMFF void registerMMFFSerializationProxies() {
     SerializationProxy::registerProxy(typeid(MMFFTorsionForce),        new MMFFTorsionForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFStretchBendForce),    new MMFFStretchBendForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFOutOfPlaneBendForce), new MMFFOutOfPlaneBendForceProxy());
-    SerializationProxy::registerProxy(typeid(MMFFVdwForce),            new MMFFVdwForceProxy());
     SerializationProxy::registerProxy(typeid(MMFFNonbondedForce),      new MMFFNonbondedForceProxy());
 }
