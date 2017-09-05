@@ -160,6 +160,7 @@
             vdwEnergy *= taper;
         }
       #endif
+        dEdR -= deltaE*invR;
         tempEnergy += vdwEnergy;
     }
   #endif
@@ -174,6 +175,6 @@
     tempEnergy += includeInteraction ? prefactor : 0;
   #endif
 #endif
-    dEdR += includeInteraction ? tempForce*rBufInv*rBufInv : 0;
+    dEdR += includeInteraction ? tempForce*rBufInv*invR : 0;
 #endif
 }

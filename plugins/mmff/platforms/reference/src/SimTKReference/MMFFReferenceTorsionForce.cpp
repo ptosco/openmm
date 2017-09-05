@@ -114,7 +114,7 @@ double MMFFReferenceTorsionForce::calculateTorsionIxn(const Vec3& positionAtomA,
    double energy         = parameters[0];
    double cosFactor      = 1.0;
    for (int ii = 1; ii < 4; ii++) {
-      dEdAngle  -= ii*parameters[ii]*cosFactor;
+      dEdAngle  -= static_cast<double>(ii)*parameters[ii]*cosFactor;
       cosFactor *= cosPhi;
       energy    += cosFactor*parameters[ii];
    }
@@ -143,8 +143,8 @@ double MMFFReferenceTorsionForce::calculateTorsionIxn(const Vec3& positionAtomA,
 
       double s          = forceFactors[1]*internalF[0][ii] - forceFactors[2]*internalF[3][ii]; 
 
-      internalF[1][ii]  = internalF[0][ii] - s;
-      internalF[2][ii]  = internalF[3][ii] + s;
+      internalF[1][ii]  = -(internalF[0][ii] - s);
+      internalF[2][ii]  = -(internalF[3][ii] + s);
    }
 
    // accumulate forces

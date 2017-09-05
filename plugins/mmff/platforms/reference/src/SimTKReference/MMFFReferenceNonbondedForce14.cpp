@@ -101,10 +101,10 @@ void MMFFReferenceNonbondedForce14::calculateBondIxn(int* atomIndices, vector<Ve
     double gtau         = parameters[1]*tau_7*r_ij_6*(MMFFReferenceNonbondedForce::ghal+1.0)*ratio*ratio;
 
     double vdwEnergy    = parameters[1]*tau_7*sigma_7*((MMFFReferenceNonbondedForce::ghal+1.0)*sigma_7/rho - 2.0);
-    double vdw_dEdR     = -7.0*(dtau*vdwEnergy + gtau);
+    double vdw_dEdR     = 7.0*(dtau*vdwEnergy + gtau);
 
     double coulEnergy   = ONE_4PI_EPS0*parameters[2]*inverseRbuf;
-    double dEdR         = vdw_dEdR*inverseR + coulEnergy*inverseRbuf*inverseRbuf;
+    double dEdR         = vdw_dEdR*inverseR + coulEnergy*inverseRbuf*inverseR;
 
    // accumulate forces
 
