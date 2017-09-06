@@ -18,6 +18,7 @@ SET(OpenMM_FWRAPPER "OpenMMFortranWrapper")
 SET(OpenMM_FMODULE  "OpenMMFortranModule")
 
 SET(CPP_EXAMPLES HelloArgon HelloSodiumChloride HelloEthane HelloWaterBox)
+SET(MMFF_CPP_EXAMPLES HelloEthaneMMFF)
 SET(C_EXAMPLES HelloArgonInC HelloSodiumChlorideInC)
 SET(F_EXAMPLES HelloArgonInFortran HelloSodiumChlorideInFortran)
 
@@ -43,6 +44,35 @@ FOREACH(EX_ROOT ${CPP_EXAMPLES})
             LINK_FLAGS "${EXTRA_LINK_FLAGS}"
             COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS} -DOPENMM_USE_STATIC_LIBRARIES")
         TARGET_LINK_LIBRARIES(${EX_STATIC} ${STATIC_TARGET})
+    ENDIF (OPENMM_BUILD_STATIC_LIB)
+
+    INSTALL(FILES ${EX_ROOT}.cpp DESTINATION examples)
+
+ENDFOREACH(EX_ROOT ${CPP_EXAMPLES})
+
+FOREACH(EX_ROOT ${MMFF_CPP_EXAMPLES})
+    include_directories(../plugins/mmff/openmmapi/include)
+    IF (OPENMM_BUILD_SHARED_LIB)
+        # Link with shared library
+        ADD_EXECUTABLE(${EX_ROOT} ${EX_ROOT}.cpp)
+        SET_TARGET_PROPERTIES(${EX_ROOT}
+            PROPERTIES
+            PROJECT_LABEL "Example - ${EX_ROOT}"
+            LINK_FLAGS "${EXTRA_LINK_FLAGS}"
+            COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS}")
+        TARGET_LINK_LIBRARIES(${EX_ROOT} ${SHARED_TARGET} OpenMMMMFF)
+    ENDIF (OPENMM_BUILD_SHARED_LIB)
+
+    IF (OPENMM_BUILD_STATIC_LIB)
+        # Link with static library
+        SET(EX_STATIC ${EX_ROOT}Static)
+        ADD_EXECUTABLE(${EX_STATIC} ${EX_ROOT}.cpp)
+        SET_TARGET_PROPERTIES(${EX_STATIC}
+            PROPERTIES
+            PROJECT_LABEL "Example - ${EX_STATIC}"
+            LINK_FLAGS "${EXTRA_LINK_FLAGS}"
+            COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS} -DOPENMM_USE_STATIC_LIBRARIES")
+        TARGET_LINK_LIBRARIES(${EX_STATIC} ${STATIC_TARGET} OpenMMMMFF_static)
     ENDIF (OPENMM_BUILD_STATIC_LIB)
 
     INSTALL(FILES ${EX_ROOT}.cpp DESTINATION examples)

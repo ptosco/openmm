@@ -100,9 +100,9 @@ double MMFFReferenceOutOfPlaneBendForce::calculateOutOfPlaneBendIxn(const Vec3& 
     if (!(cosine < 1.0)) {
        angle = 0.0;
     } else if (!(cosine > -1.0)) {
-       angle = RADIAN*PI_M;
+       angle = PI_M;
     } else {
-       angle = RADIAN*ACOS(cosine);
+       angle = ACOS(cosine);
     }
  
     // chain rule
@@ -113,7 +113,6 @@ double MMFFReferenceOutOfPlaneBendForce::calculateOutOfPlaneBendIxn(const Vec3& 
     double dEdDt = angleK*dt;
     // calculate energy if 'energy' is set
     double energy = 0.5*dEdDt*dt;
-    dEdDt *= RADIAN;
  
     double dEdCos  = dEdDt/sqrt(cc*bkk2);
     if (eE > 0.0) {

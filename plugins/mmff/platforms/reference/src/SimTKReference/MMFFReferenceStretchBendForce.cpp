@@ -98,13 +98,13 @@ double MMFFReferenceStretchBendForce::calculateStretchBendIxn(const Vec3& positi
     if (!(cosine < 1.0)) {
        angle = 0.0;
     } else if (!(cosine > -1.0)) {
-       angle = RADIAN*PI_M;
+       angle = PI_M;
     } else {
-       angle = RADIAN*ACOS(cosine);
+       angle = ACOS(cosine);
     }
  
-    double termA = -RADIAN/(rAB2*rP);
-    double termC =  RADIAN/(rCB2*rP);
+    double termA = -1.0/(rAB2*rP);
+    double termC =  1.0/(rCB2*rP);
  
     // P = CBxAB
  
@@ -132,7 +132,7 @@ double MMFFReferenceStretchBendForce::calculateStretchBendIxn(const Vec3& positi
     for (int ii = 0; ii < LastAtomIndex; ii++) {
         subForce[ii].resize(3);
     }
-    double dt = angle - idealAngle*RADIAN;
+    double dt = angle - idealAngle;
     for (int jj = 0; jj < 3; jj++) {
        subForce[A][jj] = k1Parameter*dt*termA*deltaR[AB][jj] + drkk*deltaR[ABxP][jj];
        subForce[C][jj] = k2Parameter*dt*termC*deltaR[CB][jj] + drkk*deltaR[CBxP][jj];

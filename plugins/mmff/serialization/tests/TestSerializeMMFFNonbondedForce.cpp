@@ -51,9 +51,9 @@ void testSerialization() {
     double alpha = 0.5;
     int nx = 3, ny = 5, nz = 7;
     force.setPMEParameters(alpha, nx, ny, nz);
-    force.addParticle(1, 0.1, 0.01);
-    force.addParticle(0.5, 0.2, 0.02);
-    force.addParticle(-0.5, 0.3, 0.03);
+    force.addParticle(1, 0.1, 0.01, 0.01, '-');
+    force.addParticle(0.5, 0.2, 0.02, 0.02, '-');
+    force.addParticle(-0.5, 0.3, 0.03, 0.03, '-');
     force.addException(0, 1, 2, 0.5, 0.1);
     force.addException(1, 2, 0.2, 0.4, 0.2);
 

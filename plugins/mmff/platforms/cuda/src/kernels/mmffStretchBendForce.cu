@@ -25,21 +25,21 @@ real angle;
 if (cosine > 0.99f || cosine < -0.99f) {
     // Highly unlikely a stretch-bend angle will be near 0 or 180, but just in case...
     real3 cross_prod = cross(make_real3(ab.x, ab.y, ab.z), make_real3(cb.x, cb.y, cb.z));
-    angle = ASIN(SQRT(dot(cross_prod, cross_prod))/(rab*rcb))*RAD_TO_DEG;
+    angle = ASIN(SQRT(dot(cross_prod, cross_prod))/(rab*rcb));
     if (cosine < 0.0f)
         angle = 180-angle;
 }
 else
-    angle = ACOS(cosine)*RAD_TO_DEG;
+    angle = ACOS(cosine);
 
 // find chain rule terms for the bond angle deviation
 
 float3 parameters = PARAMS[index];
 float2 force_constants = FORCE_CONSTANTS[index];
 
-real dt = angle - RAD_TO_DEG*parameters.z;
-real terma = rab*rp != 0 ? (-RAD_TO_DEG/(rab*rab*rp)) : (real) 0;
-real termc = rcb*rp != 0 ? (RAD_TO_DEG/(rcb*rcb*rp)) : (real) 0;
+real dt = angle - parameters.z;
+real terma = rab*rp != 0 ? (-RECIP(rab*rab*rp)) : (real) 0;
+real termc = rcb*rp != 0 ? (RECIP(rcb*rcb*rp)) : (real) 0;
 
 real ddtdxia = terma * (ab.y*zp-ab.z*yp);
 real ddtdyia = terma * (ab.z*xp-ab.x*zp);
