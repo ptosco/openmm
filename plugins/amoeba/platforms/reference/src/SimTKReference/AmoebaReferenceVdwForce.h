@@ -247,16 +247,12 @@ private:
     double arithmeticSigmaCombiningRule(double sigmaI, double sigmaJ) const;
     double  geometricSigmaCombiningRule(double sigmaI, double sigmaJ) const;
     double  cubicMeanSigmaCombiningRule(double sigmaI, double sigmaJ) const;
-    double       mmffSigmaCombiningRule(double sigmaI, double sigmaJ) const;
 
     CombiningFunction _combineEpsilons;
     double arithmeticEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
     double  geometricEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double   harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double        hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    double        mmffEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
-    static double mmffEpsilonCombiningRuleHelper(double combinedSigma,
-        double alphaI_d_NI, double alphaJ_d_NJ, double GI_t_alphaI, double GJ_t_alphaJ);
+    double  harmonicEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
+    double  hhgEpsilonCombiningRule(double epsilonI, double epsilonJ) const;
 
     /**---------------------------------------------------------------------------------------
     

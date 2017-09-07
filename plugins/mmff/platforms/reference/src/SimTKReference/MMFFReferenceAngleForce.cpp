@@ -25,6 +25,7 @@
 #include "MMFFReferenceForce.h"
 #include "MMFFReferenceAngleForce.h"
 #include "SimTKOpenMMRealType.h"
+#include <algorithm>
 
 using std::vector;
 using namespace OpenMM;

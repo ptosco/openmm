@@ -122,7 +122,7 @@ public:
     /**
      * Set sigma combining rule
      *
-     * @param sigmaCombiningRule   sigma combining rule:  'ARITHMETIC', 'GEOMETRIC', 'CUBIC-MEAN', 'MMFF'
+     * @param sigmaCombiningRule   sigma combining rule:  'ARITHMETIC', 'GEOMETRIC'. 'CUBIC-MEAN'
      */
     void setSigmaCombiningRule(const std::string& sigmaCombiningRule);
 

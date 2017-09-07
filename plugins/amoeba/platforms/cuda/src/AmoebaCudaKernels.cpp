@@ -2563,7 +2563,7 @@ void CudaCalcAmoebaVdwForceKernel::initialize(const System& system, const Amoeba
     cu.setAsCurrent();
     sigmaEpsilon = CudaArray::create<float2>(cu, cu.getPaddedNumAtoms(), "sigmaEpsilon");
     bondReductionAtoms = CudaArray::create<int>(cu, cu.getPaddedNumAtoms(), "bondReductionAtoms");
-    bondReductionFactors = CudaArray::create<float>(cu, cu.getPaddedNumAtoms(), "bondReductionFactors");
+    bondReductionFactors = CudaArray::create<float>(cu, cu.getPaddedNumAtoms(), "sigmaEpsilon");
     tempPosq = new CudaArray(cu, cu.getPaddedNumAtoms(), cu.getUseDoublePrecision() ? sizeof(double4) : sizeof(float4), "tempPosq");
     tempForces = CudaArray::create<long long>(cu, 3*cu.getPaddedNumAtoms(), "tempForces");
     
@@ -2597,7 +2597,6 @@ void CudaCalcAmoebaVdwForceKernel::initialize(const System& system, const Amoeba
     
     nonbonded = new CudaNonbondedUtilities(cu);
     nonbonded->addParameter(CudaNonbondedUtilities::ParameterInfo("sigmaEpsilon", "float", 2, sizeof(float2), sigmaEpsilon->getDevicePointer()));
-    nonbonded->addParameter(CudaNonbondedUtilities::ParameterInfo("bondReductionFactors", "float", 1, sizeof(float), bondReductionFactors->getDevicePointer()));
     
     // Create the interaction kernel.
     
@@ -2609,8 +2608,6 @@ void CudaCalcAmoebaVdwForceKernel::initialize(const System& system, const Amoeba
         replacements["SIGMA_COMBINING_RULE"] = "2";
     else if (sigmaCombiningRule == "CUBIC-MEAN")
         replacements["SIGMA_COMBINING_RULE"] = "3";
-    else if (sigmaCombiningRule == "MMFF")
-        replacements["SIGMA_COMBINING_RULE"] = "4";
     else
         throw OpenMMException("Illegal combining rule for sigma: "+sigmaCombiningRule);
     string epsilonCombiningRule = force.getEpsilonCombiningRule();
@@ -2622,8 +2619,6 @@ void CudaCalcAmoebaVdwForceKernel::initialize(const System& system, const Amoeba
         replacements["EPSILON_COMBINING_RULE"] = "3";
     else if (epsilonCombiningRule == "HHG")
         replacements["EPSILON_COMBINING_RULE"] = "4";
-    else if (epsilonCombiningRule == "MMFF")
-        replacements["EPSILON_COMBINING_RULE"] = "5";
     else
         throw OpenMMException("Illegal combining rule for sigma: "+sigmaCombiningRule);
     double cutoff = force.getCutoffDistance();

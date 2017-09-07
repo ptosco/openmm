@@ -26,11 +26,11 @@
 #define __MMFFReferenceNonbondedForce14_H__
 
 #include "ReferenceBondIxn.h"
-#include "openmm/internal/windowsExportMMFF.h"
+#include "openmm/internal/windowsExport.h"
 
 namespace OpenMM {
 
-class OPENMM_EXPORT_MMFF MMFFReferenceNonbondedForce14 : public ReferenceBondIxn {
+class OPENMM_EXPORT MMFFReferenceNonbondedForce14 : public ReferenceBondIxn {
 
    public:
 
