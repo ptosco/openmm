@@ -63,9 +63,13 @@ namespace OpenMM {
  * a list of bonds and the Coulomb scale factor to use for 1-4 interactions.  It identifies all pairs of particles which
  * are separated by 1, 2, or 3 bonds, then automatically creates exceptions for them.
  *
- * When using a cutoff, van der Waals interactions are sharply truncated at the cutoff distance.
+ * When using a cutoff, by default Lennard-Jones interactions are sharply truncated at the cutoff distance.
+ * Optionally you can instead use a switching function to make the interaction smoothly go to zero over a finite
+ * distance range.  To enable this, call setUseSwitchingFunction().  You must also call setSwitchingDistance()
+ * to specify the distance at which the interaction should begin to decrease.  The switching distance must be
+ * less than the cutoff distance.
  *
- * An optional feature of this class (enabled by default) is to add a contribution to the energy which approximates
+ * Another optional feature of this class (enabled by default) is to add a contribution to the energy which approximates
  * the effect of all van der Waals interactions beyond the cutoff in a periodic system.  When running a simulation
  * at constant pressure, this can improve the quality of the result.  Call setUseDispersionCorrection() to set whether
  * this should be used.
@@ -142,6 +146,26 @@ public:
      * @param distance    the cutoff distance, measured in nm
      */
     void setCutoffDistance(double distance);
+    /**
+     * Get whether a switching function is applied to the van der Waals interaction.  If the nonbonded method is set
+     * to NoCutoff, this option is ignored.
+     */
+    bool getUseSwitchingFunction() const;
+    /**
+     * Set whether a switching function is applied to the van der Waals interaction.  If the nonbonded method is set
+     * to NoCutoff, this option is ignored.
+     */
+    void setUseSwitchingFunction(bool use);
+    /**
+     * Get the distance at which the switching function begins to reduce the van der Waals interaction.  This must be
+     * less than the cutoff distance.
+     */
+    double getSwitchingDistance() const;
+    /**
+     * Set the distance at which the switching function begins to reduce the van der Waals interaction.  This must be
+     * less than the cutoff distance.
+     */
+    void setSwitchingDistance(double distance);
     /**
      * Get the dielectric constant to use for the solvent in the reaction field approximation.
      */
@@ -364,8 +388,8 @@ private:
     class ParticleInfo;
     class ExceptionInfo;
     NonbondedMethod nonbondedMethod;
-    double cutoffDistance, rfDielectric, ewaldErrorTol, alpha, dalpha;
-    bool useDispersionCorrection;
+    double cutoffDistance, switchingDistance, rfDielectric, ewaldErrorTol, alpha, dalpha;
+    bool useSwitchingFunction, useDispersionCorrection;
     int recipForceGroup, nx, ny, nz, dnx, dny, dnz;
     std::vector<ParticleInfo> particles;
     std::vector<ExceptionInfo> exceptions;
