@@ -63,6 +63,7 @@ ENDIF (ANDROID)
 # Better to set CMAKE_INSTALL_PREFIX to /usr/local/openmm and leave /openmm/ off the
 # install target names.  Plus, the user now has the opportunity to install into /usr/local/
 # if she so chooses.  --cmb
+string(REGEX REPLACE "\\\\" "\\\\\\\\" OPENMM_INSTALL_PREFIX ${OPENMM_INSTALL_PREFIX})
 IF(${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT})
   SET(CMAKE_INSTALL_PREFIX ${OPENMM_INSTALL_PREFIX} CACHE PATH "Where to install OpenMM" FORCE)
 ENDIF(${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT})
@@ -144,13 +145,11 @@ SET(OPENMM_MAJOR_VERSION 7)
 SET(OPENMM_MINOR_VERSION 2)
 SET(OPENMM_BUILD_VERSION 0)
 
-string(REGEX REPLACE "\\\\" "\\\\\\\\" OPENMM_INSTALL_PREFIX_ESCAPED ${OPENMM_INSTALL_PREFIX})
-
 ADD_DEFINITIONS(-DOPENMM_LIBRARY_NAME=${OPENMM_LIBRARY_NAME}
                 -DOPENMM_MAJOR_VERSION=${OPENMM_MAJOR_VERSION}
                 -DOPENMM_MINOR_VERSION=${OPENMM_MINOR_VERSION}
                 -DOPENMM_BUILD_VERSION=${OPENMM_BUILD_VERSION}
-                -DOPENMM_INSTALL_PREFIX=${OPENMM_INSTALL_PREFIX_ESCAPED})
+                -DOPENMM_INSTALL_PREFIX=${OPENMM_INSTALL_PREFIX})
 
 # -DOPENMM_TYPE has to be defined in the target subdirectories.
 # -Dsimbody_EXPORTS defined automatically when Windows DLL build is being done.

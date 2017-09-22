@@ -44,10 +44,6 @@ static const bool   WantEnergy   = true;
 const double Coulomb14Scale      = 0.75;
 const double LennardJones14Scale = 1.0;
 
-struct AtomType {
-    double mass, charge, vdwRadiusInAngstroms, vdwEnergyInKcal;
-} atomType[] = {/*0 H*/ 1.008, 0.0605, 1.4870, 0.0157,
-                /*1 C*/12.011, -.1815, 1.9080, 0.1094};
 struct MMFFAtomType {
     double mass, charge, sigma, G_t_alpha, alpha_d_N;
     char vdwDA;
@@ -55,11 +51,6 @@ struct MMFFAtomType {
                 /*1 C*/12.011, 0.000, 3.93774, 1.3461, 0.421687, '-'};
 const int H = 0, C = 1;
 
-struct BondType {
-    double nominalLengthInAngstroms, stiffnessInKcalPerAngstrom2;
-    bool   canConstrain;
-} bondType[] = {/*0 CC*/1.526, 310., false,
-                /*1 CH*/1.09 , 340., true};
 struct MMFFBondType {
     double nominalLengthInAngstroms, stiffnessInKcalPerAngstrom2;
     bool   canConstrain;
@@ -67,10 +58,6 @@ struct MMFFBondType {
                 /*1 CH*/1.093, 685.982, true};
 const int CC = 0, CH = 1;
 
-struct AngleType {
-    double nominalAngleInDegrees, stiffnessInKcalPerRadian2;
-} angleType[] = {/*0 HCC*/109.5, 50.,
-                 /*1 HCH*/109.5, 35.};
 struct MMFFAngleType {
     double nominalAngleInDegrees, stiffnessInKcalPerRadian2;
     bool isLinear;
@@ -84,10 +71,6 @@ struct MMFFStretchBendType {
 } mmffStretchBendType[] = {/*0 HCC*/1.508, 1.093, 110.549, 32.6727, 10.0753,
                  /*1 HCH*/1.093, 1.093, 108.836, 16.5522, 16.5522};
 
-struct TorsionType {
-    int    periodicity;
-    double phaseInDegrees, amplitudeInKcal;
-} torsionType[] = {/*0 HCCH*/3, 0., 0.150};
 struct MMFFTorsionType {
     double V1inKcal, V2inKcal, V3inKcal;
 } mmffTorsionType[] = {/*0 HCCH*/0.284, -1.386, 0.314};
