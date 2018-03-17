@@ -113,7 +113,8 @@ class Topology(object):
         return len(self._chains)
 
     def getNumBonds(self):
-        """Return the number of bonds in the Topology."""
+        """Return the number of bonds in the Topology.
+        """
         return len(self._bonds)
 
     def addChain(self, id=None):
@@ -154,6 +155,8 @@ class Topology(object):
         Residue
              the newly created Residue
         """
+        if len(chain._residues) > 0 and self._numResidues != chain._residues[-1].index+1:
+            raise ValueError('All residues within a chain must be contiguous')
         if id is None:
             id = str(self._numResidues+1)
         residue = Residue(name, self._numResidues, chain, id)
@@ -181,6 +184,8 @@ class Topology(object):
         Atom
              the newly created Atom
         """
+        if len(residue._atoms) > 0 and self._numAtoms != residue._atoms[-1].index+1:
+            raise ValueError('All atoms within a residue must be contiguous')
         if id is None:
             id = str(self._numAtoms+1)
         atom = Atom(name, element, self._numAtoms, residue, id)
@@ -459,6 +464,14 @@ class Bond(namedtuple('Bond', ['atom1', 'atom2'])):
     def __getnewargs__(self):
         "Support for pickle protocol 2: http://docs.python.org/2/library/pickle.html#pickling-and-unpickling-normal-class-instances"
         return self[0], self[1], self.type, self.order
+
+    def __getstate__(self):
+        """
+        Additional support for pickle since parent class implements its own __getstate__
+        so pickle does not store or restore the type and order, python 2 problem only
+        https://www.python.org/dev/peps/pep-0307/#case-3-pickling-new-style-class-instances-using-protocol-2
+        """
+        return self.__dict__
 
     def __deepcopy__(self, memo):
         return Bond(self[0], self[1], self.type, self.order)

@@ -117,22 +117,23 @@ class CharmmPsfFile(object):
 
     This structure has numerous attributes that are lists of the elements of
     this structure, including atoms, bonds, torsions, etc. The attributes are
-        - residue_list
-        - atom_list
-        - bond_list
-        - angle_list
-        - dihedral_list
-        - dihedral_parameter_list
-        - improper_list
-        - cmap_list
-        - donor_list    # hbonds donors?
-        - acceptor_list # hbond acceptors?
-        - group_list    # list of nonbonded interaction groups
+
+    - residue_list
+    - atom_list
+    - bond_list
+    - angle_list
+    - dihedral_list
+    - dihedral_parameter_list
+    - improper_list
+    - cmap_list
+    - donor_list    # hbonds donors?
+    - acceptor_list # hbond acceptors?
+    - group_list    # list of nonbonded interaction groups
 
     Additional attribute is available if a CharmmParameterSet is loaded into
     this structure.
 
-        - urey_bradley_list
+    - urey_bradley_list
 
     The lengths of each of these lists gives the pointers (e.g., natom, nres,
     etc.)
@@ -341,9 +342,9 @@ class CharmmPsfFile(object):
             # We have a CHARMM PSF file; now do NUMLP/NUMLPH sections
             numlp, numlph = psfsections['NUMLP NUMLPH'][0]
             if numlp != 0 or numlph != 0:
-                raise NotImplemented('Cannot currently handle PSFs with lone '
-                                     'pairs defined in the NUMLP/NUMLPH '
-                                     'section.')
+                raise NotImplementedError('Cannot currently handle PSFs with lone '
+                                          'pairs defined in the NUMLP/NUMLPH '
+                                          'section.')
         # Now do the CMAPs
         ncrterm = conv(psfsections['NCRTERM'][0], int, 'Number of cross-terms')
         holder = psfsections['NCRTERM'][1]
@@ -713,7 +714,7 @@ class CharmmPsfFile(object):
             solvent.
         implicitSolventSaltConc : float=0.0*u.moles/u.liter
             Salt concentration for GB simulations. Converted to Debye length
-            `kappa'
+            ``kappa``
         temperature : float=298.15*u.kelvin
             Temperature used in the salt concentration-to-kappa conversion for
             GB salt concentration term
@@ -739,7 +740,7 @@ class CharmmPsfFile(object):
             raise a ValueError
         """
         # Load the parameter set
-        self.loadParameters(params.condense())
+        self.loadParameters(params)
         hasbox = self.topology.getUnitCellDimensions() is not None
         # Check GB input parameters
         if implicitSolvent is not None and gbsaModel not in ('ACE', None):

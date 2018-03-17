@@ -6,7 +6,7 @@ Simbios, the NIH National Center for Physics-Based Simulation of
 Biological Structures at Stanford, funded under the NIH Roadmap for
 Medical Research, grant U54 GM072970. See https://simtk.org.
 
-Portions copyright (c) 2012-2016 Stanford University and the Authors.
+Portions copyright (c) 2012-2017 Stanford University and the Authors.
 Authors: Peter Eastman, Mark Friedrichs
 Contributors:
 
@@ -190,12 +190,16 @@ class ForceField(object):
             method from which the forcefield XML data can be loaded.
         """
 
-        if not isinstance(files, tuple):
-            files = (files,)
+        if isinstance(files, tuple):
+            files = list(files)
+        else:
+            files = [files]
 
         trees = []
 
-        for file in files:
+        i = 0
+        while i < len(files):
+            file = files[i]
             tree = None
             try:
                 # this handles either filenames or open file-like objects
@@ -221,12 +225,12 @@ class ForceField(object):
                 raise ValueError('Could not locate file "%s"' % file)
 
             trees.append(tree)
+            i += 1
 
-        # Process includes.
+            # Process includes in this file.
 
-        for parentFile, tree in zip(files, trees):
-            if isinstance(parentFile, str):
-                parentDir = os.path.dirname(parentFile)
+            if isinstance(file, str):
+                parentDir = os.path.dirname(file)
             else:
                 parentDir = ''
             for include in tree.getroot().findall('Include'):
@@ -234,7 +238,8 @@ class ForceField(object):
                 joined = os.path.join(parentDir, includeFile)
                 if os.path.isfile(joined):
                     includeFile = joined
-                self.loadFile(includeFile)
+                if includeFile not in files:
+                    files.append(includeFile)
 
         # Load the atom types.
 
@@ -426,8 +431,8 @@ class ForceField(object):
     def registerTemplatePatch(self, residue, patch, patchResidueIndex):
         """Register that a particular patch can be used with a particular residue."""
         if residue not in self._templatePatches:
-            self._templatePatches[residue] = []
-        self._templatePatches[residue].append((patch, patchResidueIndex))
+            self._templatePatches[residue] = set()
+        self._templatePatches[residue].add((patch, patchResidueIndex))
 
     def registerScript(self, script):
         """Register a new script to be executed after building the System."""
@@ -445,17 +450,19 @@ class ForceField(object):
         generator : function
             A function that will be called when a residue is encountered that does not match an existing forcefield template.
 
-        When a residue without a template is encountered, the `generator` function is called with:
+        When a residue without a template is encountered, the ``generator`` function is called with:
 
         ::
            success = generator(forcefield, residue)
-        ```
 
-        where `forcefield` is the calling `ForceField` object and `residue` is a simtk.openmm.app.topology.Residue object.
+        where ``forcefield`` is the calling ``ForceField`` object and ``residue`` is a simtk.openmm.app.topology.Residue object.
 
-        `generator` must conform to the following API:
+        ``generator`` must conform to the following API:
+
         ::
-          Parameters
+           generator API
+
+           Parameters
            ----------
            forcefield : simtk.openmm.app.ForceField
                The ForceField object to which residue templates and/or parameters are to be added.
@@ -1004,7 +1011,7 @@ class ForceField(object):
 
     def createSystem(self, topology, nonbondedMethod=NoCutoff, nonbondedCutoff=1.0*unit.nanometer,
                      constraints=None, rigidWater=True, removeCMMotion=True, hydrogenMass=None, residueTemplates=dict(),
-                     ignoreExternalBonds=False, **args):
+                     ignoreExternalBonds=False, switchDistance=None, flexibleConstraints=False, **args):
         """Construct an OpenMM System representing a Topology with this force field.
 
         Parameters
@@ -1040,6 +1047,9 @@ class ForceField(object):
             not terminated properly.  This option can create ambiguities where multiple
             templates match the same residue.  If that happens, use the residueTemplates
             argument to specify which one to use.
+        switchDistance : float=None
+            The distance at which the potential energy switching function is turned on for
+            Lennard-Jones interactions. If this is None, no switching function will be used.
         flexibleConstraints : boolean=False
             If True, parameters for constrained degrees of freedom will be added to the System
         args
@@ -1052,6 +1062,8 @@ class ForceField(object):
         system
             the newly created System
         """
+        args['switchDistance'] = switchDistance
+        args['flexibleConstraints'] = flexibleConstraints
         data = ForceField._SystemData()
         data.atoms = list(topology.atoms())
         for atom in data.atoms:
@@ -1397,8 +1409,9 @@ def _matchResidue(res, template, bondedToAtom, ignoreExternalBonds=False):
 
     candidates = [[] for i in range(numAtoms)]
     for i in range(numAtoms):
+        exactNameMatch = (atoms[i].element is None and any(atom.element is None and atom.name == atoms[i].name for atom in template.atoms))
         for j, atom in enumerate(template.atoms):
-            if (atom.element is not None and atom.element != atoms[i].element) or (atom.element is None and atom.name != atoms[i].name):
+            if (atom.element is not None and atom.element != atoms[i].element) or (exactNameMatch and atom.name != atoms[i].name):
                 continue
             if len(atom.bondedTo) != len(bondedTo[i]):
                 continue
@@ -2014,11 +2027,17 @@ class PeriodicTorsionGenerator(object):
         self.ff = forcefield
         self.proper = []
         self.improper = []
+        self.propersForAtomType = defaultdict(set)
 
     def registerProperTorsion(self, parameters):
         torsion = self.ff._parseTorsion(parameters)
         if torsion is not None:
+            index = len(self.proper)
             self.proper.append(torsion)
+            for t in torsion.types2:
+                self.propersForAtomType[t].add(index)
+            for t in torsion.types3:
+                self.propersForAtomType[t].add(index)
 
     def registerImproperTorsion(self, parameters, ordering='default'):
         torsion = self.ff._parseTorsion(parameters)
@@ -2060,7 +2079,8 @@ class PeriodicTorsionGenerator(object):
             type3 = data.atomType[data.atoms[torsion[2]]]
             type4 = data.atomType[data.atoms[torsion[3]]]
             match = None
-            for tordef in self.proper:
+            for index in self.propersForAtomType[type2]:
+                tordef = self.proper[index]
                 types1 = tordef.types1
                 types2 = tordef.types2
                 types3 = tordef.types3
@@ -2307,6 +2327,9 @@ class NonbondedGenerator(object):
             force.addParticle(values[0], values[1], values[2])
         force.setNonbondedMethod(methodMap[nonbondedMethod])
         force.setCutoffDistance(nonbondedCutoff)
+        if args['switchDistance'] is not None:
+            force.setUseSwitchingFunction(True)
+            force.setSwitchingDistance(args['switchDistance'])
         if 'ewaldErrorTolerance' in args:
             force.setEwaldErrorTolerance(args['ewaldErrorTolerance'])
         if 'useDispersionCorrection' in args:
@@ -2363,35 +2386,41 @@ class LennardJonesGenerator(object):
             generator.registerNBFIX(Nbfix.attrib)
 
     def createForce(self, sys, data, nonbondedMethod, nonbondedCutoff, args):
-        # First derive the lookup tables
+        # First derive the lookup tables.  We need to include entries for every type
+        # that a) appears in the system and b) has unique parameters.
 
         nbfixTypeSet = set().union(*self.nbfixTypes)
-        ljIndexList = [None]*len(data.atoms)
-        numLjTypes = 0
-        ljTypeList = []
-        typeMap = {}
-        for i, atom in enumerate(data.atoms):
-            atype = data.atomType[atom]
-            values = tuple(self.ljTypes.getAtomParameters(atom, data))
-            if values in typeMap and atype not in nbfixTypeSet:
-                # Only non-NBFIX types can be compressed
-                ljIndexList[i] = typeMap[values]
+        allTypes = set(data.atomType[atom] for atom in data.atoms)
+        mergedTypes = []
+        mergedTypeParams = []
+        paramsToMergedType = {}
+        typeToMergedType = {}
+        for t in allTypes:
+            typeParams = self.ljTypes.paramsForType[t]
+            params = (typeParams['sigma'], typeParams['epsilon'])
+            if t in nbfixTypeSet:
+                # NBFIX types cannot be merged.
+                typeToMergedType[t] = len(mergedTypes)
+                mergedTypes.append(t)
+                mergedTypeParams.append(params)
+            elif params in paramsToMergedType:
+                # We can merge this with another type.
+                typeToMergedType[t] = paramsToMergedType[params]
             else:
-                typeMap[values] = numLjTypes
-                ljIndexList[i] = numLjTypes
-                numLjTypes += 1
-                ljTypeList.append(atype)
-        reverseMap = [0]*len(typeMap)
-        for typeValue in typeMap:
-            reverseMap[typeMap[typeValue]] = typeValue
+                # This is a new type.
+                typeToMergedType[t] = len(mergedTypes)
+                paramsToMergedType[params] = len(mergedTypes)
+                mergedTypes.append(t)
+                mergedTypeParams.append(params)
 
         # Now everything is assigned. Create the A- and B-coefficient arrays
 
+        numLjTypes = len(mergedTypes)
         acoef = [0]*(numLjTypes*numLjTypes)
         bcoef = acoef[:]
         for m in range(numLjTypes):
             for n in range(numLjTypes):
-                pair = (ljTypeList[m], ljTypeList[n])
+                pair = (mergedTypes[m], mergedTypes[n])
                 if pair in self.nbfixTypes:
                     epsilon = self.nbfixTypes[pair][1]
                     sigma = self.nbfixTypes[pair][0]
@@ -2400,9 +2429,9 @@ class LennardJonesGenerator(object):
                     bcoef[m+numLjTypes*n] = 4*epsilon*sigma6
                     continue
                 else:
-                    sigma = 0.5*(reverseMap[m][0]+reverseMap[n][0])
+                    sigma = 0.5*(mergedTypeParams[m][0]+mergedTypeParams[n][0])
                     sigma6 = sigma**6
-                    epsilon = math.sqrt(reverseMap[m][-1]*reverseMap[n][-1])
+                    epsilon = math.sqrt(mergedTypeParams[m][1]*mergedTypeParams[n][1])
                     acoef[m+numLjTypes*n] = 4*epsilon*sigma6*sigma6
                     bcoef[m+numLjTypes*n] = 4*epsilon*sigma6
 
@@ -2418,11 +2447,14 @@ class LennardJonesGenerator(object):
             self.force.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)
         else:
             raise AssertionError('Unrecognized nonbonded method [%s]' % nonbondedMethod)
+        if args['switchDistance'] is not None:
+            force.setUseSwitchingFunction(True)
+            force.setSwitchingDistance(args['switchDistance'])
 
         # Add the particles
 
-        for i in ljIndexList:
-            self.force.addParticle((i,))
+        for atom in data.atoms:
+            self.force.addParticle((typeToMergedType[data.atomType[atom]],))
         self.force.setUseLongRangeCorrection(True)
         self.force.setCutoffDistance(nonbondedCutoff)
         sys.addForce(self.force)
@@ -2431,37 +2463,38 @@ class LennardJonesGenerator(object):
         # Create the exceptions.
 
         bondIndices = _findBondsForExclusions(data, sys)
-        if self.lj14scale == 1:
-            # Just exclude the 1-2 and 1-3 interactions.
+        forceCopy = deepcopy(self.force)
+        forceCopy.createExclusionsFromBonds(bondIndices, 2)
+        self.force.createExclusionsFromBonds(bondIndices, 3)
+        if self.force.getNumExclusions() > forceCopy.getNumExclusions() and self.lj14scale != 0:
+            # We need to create a CustomBondForce and use it to implement the scaled 1-4 interactions.
 
-            self.force.createExclusionsFromBonds(bondIndices, 2)
-        else:
-            forceCopy = deepcopy(self.force)
-            forceCopy.createExclusionsFromBonds(bondIndices, 2)
-            self.force.createExclusionsFromBonds(bondIndices, 3)
-            if self.force.getNumExclusions() > forceCopy.getNumExclusions() and self.lj14scale != 0:
-                # We need to create a CustomBondForce and use it to implement the scaled 1-4 interactions.
-
-                bonded = mm.CustomBondForce('%g*epsilon*((sigma/r)^12-(sigma/r)^6)' % (4*self.lj14scale))
-                bonded.addPerBondParameter('sigma')
-                bonded.addPerBondParameter('epsilon')
-                sys.addForce(bonded)
-                skip = set(tuple(forceCopy.getExclusionParticles(i)) for i in range(forceCopy.getNumExclusions()))
-                for i in range(self.force.getNumExclusions()):
-                    p1,p2 = self.force.getExclusionParticles(i)
-                    a1 = data.atoms[p1]
-                    a2 = data.atoms[p2]
-                    if (p1,p2) not in skip and (p2,p1) not in skip:
-                        type1 = data.atomType[a1]
-                        type2 = data.atomType[a2]
-                        if (type1, type2) in self.nbfixTypes:
-                            sigma, epsilon = self.nbfixTypes[(type1, type2)]
-                        else:
-                            values1 = self.ljTypes.getAtomParameters(a1, data)
-                            values2 = self.ljTypes.getAtomParameters(a2, data)
-                            sigma = 0.5*(values1[0]+values2[0])
-                            epsilon = sqrt(values1[1]*values2[1])
-                        bonded.addBond(p1, p2, (sigma, epsilon))
+            bonded = mm.CustomBondForce('%g*epsilon*((sigma/r)^12-(sigma/r)^6)' % (4*self.lj14scale))
+            bonded.addPerBondParameter('sigma')
+            bonded.addPerBondParameter('epsilon')
+            sys.addForce(bonded)
+            skip = set(tuple(forceCopy.getExclusionParticles(i)) for i in range(forceCopy.getNumExclusions()))
+            for i in range(self.force.getNumExclusions()):
+                p1,p2 = self.force.getExclusionParticles(i)
+                a1 = data.atoms[p1]
+                a2 = data.atoms[p2]
+                if (p1,p2) not in skip and (p2,p1) not in skip:
+                    type1 = data.atomType[a1]
+                    type2 = data.atomType[a2]
+                    if (type1, type2) in self.nbfixTypes:
+                        sigma, epsilon = self.nbfixTypes[(type1, type2)]
+                    else:
+                        values1 = self.ljTypes.getAtomParameters(a1, data)
+                        values2 = self.ljTypes.getAtomParameters(a2, data)
+                        extra1 = self.ljTypes.getExtraParameters(a1, data)
+                        extra2 = self.ljTypes.getExtraParameters(a2, data)
+                        sigma1 = float(extra1['sigma14']) if 'sigma14' in extra1 else values1[0]
+                        sigma2 = float(extra2['sigma14']) if 'sigma14' in extra2 else values2[0]
+                        epsilon1 = float(extra1['epsilon14']) if 'epsilon14' in extra1 else values1[1]
+                        epsilon2 = float(extra2['epsilon14']) if 'epsilon14' in extra2 else values2[1]
+                        sigma = 0.5*(sigma1+sigma2)
+                        epsilon = sqrt(epsilon1*epsilon2)
+                    bonded.addBond(p1, p2, (sigma, epsilon))
 
 parsers["LennardJonesForce"] = LennardJonesGenerator.parseElement
 

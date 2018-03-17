@@ -97,6 +97,7 @@ SKIP_METHODS = [('State', 'getPositions'),
                 ('UpdateTimeKernel',),
                 ('VdwInfo',),
                 ('WcaDispersionInfo',),
+                ('Context',  'getIntegrator'),
                 ('Context',  'createCheckpoint'),
                 ('Context',  'loadCheckpoint'),
                 ('CudaPlatform',),
@@ -154,6 +155,7 @@ STEAL_OWNERSHIP = {("Platform", "registerPlatform") : [0],
                    ("CustomManyParticleForce", "addTabulatedFunction") : [1],
                    ("CustomCVForce", "addTabulatedFunction") : [1],
                    ("CustomCVForce", "addCollectiveVariable") : [1],
+                   ("CustomIntegrator", "addTabulatedFunction") : [1],
                    ("CompoundIntegrator", "addIntegrator") : [0],
 }
 
@@ -460,5 +462,7 @@ UNITS = {
 ("DrudeSCFIntegrator", "getMinimizationErrorTolerance") : ("unit.kilojoules_per_mole/unit.nanometer", ()),
 ("RPMDIntegrator", "getContractions") : (None, ()),
 ("RPMDIntegrator", "getTotalEnergy") : ("unit.kilojoules_per_mole", ()),
+("RMSDForce", "getReferencePositions") : ("unit.nanometer", ()),
+("RMSDForce", "getParticles") : (None, ()),
 }
 
