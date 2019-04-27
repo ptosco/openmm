@@ -586,7 +586,7 @@ private:
 class OpenCLCalcNonbondedForceKernel : public CalcNonbondedForceKernel {
 public:
     OpenCLCalcNonbondedForceKernel(std::string name, const Platform& platform, OpenCLContext& cl, const System& system) : CalcNonbondedForceKernel(name, platform),
-            hasInitializedKernel(false), cl(cl), sort(NULL), fft(NULL), dispersionFft(NULL), pmeio(NULL) {
+            hasInitializedKernel(false), cl(cl), sort(NULL), fft(NULL), dispersionFft(NULL), pmeio(NULL), usePmeQueue(false) {
     }
     ~OpenCLCalcNonbondedForceKernel();
     /**
@@ -652,10 +652,18 @@ private:
     OpenCLContext& cl;
     ForceInfo* info;
     bool hasInitializedKernel;
+    OpenCLArray charges;
     OpenCLArray sigmaEpsilon;
     OpenCLArray exceptionParams;
+    OpenCLArray baseParticleParams;
+    OpenCLArray baseExceptionParams;
+    OpenCLArray particleParamOffsets;
+    OpenCLArray exceptionParamOffsets;
+    OpenCLArray particleOffsetIndices;
+    OpenCLArray exceptionOffsetIndices;
+    OpenCLArray globalParams;
     OpenCLArray cosSinSums;
-    OpenCLArray pmeGrid;
+    OpenCLArray pmeGrid1;
     OpenCLArray pmeGrid2;
     OpenCLArray pmeBsplineModuliX;
     OpenCLArray pmeBsplineModuliY;
@@ -675,6 +683,7 @@ private:
     Kernel cpuPme;
     PmeIO* pmeio;
     SyncQueuePostComputation* syncQueue;
+    cl::Kernel computeParamsKernel;
     cl::Kernel ewaldSumsKernel;
     cl::Kernel ewaldForcesKernel;
     cl::Kernel pmeAtomRangeKernel;
@@ -695,10 +704,12 @@ private:
     cl::Kernel pmeDispersionInterpolateForceKernel;
     std::map<std::string, std::string> pmeDefines;
     std::vector<std::pair<int, int> > exceptionAtoms;
+    std::vector<std::string> paramNames;
+    std::vector<double> paramValues;
     double ewaldSelfEnergy, dispersionCoefficient, alpha, dispersionAlpha;
     int gridSizeX, gridSizeY, gridSizeZ;
     int dispersionGridSizeX, dispersionGridSizeY, dispersionGridSizeZ;
-    bool hasCoulomb, hasLJ, usePmeQueue, doLJPME;
+    bool hasCoulomb, hasLJ, usePmeQueue, doLJPME, usePosqCharges, recomputeParams, hasOffsets;
     NonbondedMethod nonbondedMethod;
     static const int PmeOrder = 5;
 };
@@ -795,6 +806,7 @@ private:
     OpenCLContext& cl;
     ForceInfo* info;
     OpenCLArray params;
+    OpenCLArray charges;
     OpenCLArray bornSum;
     OpenCLArray longBornSum;
     OpenCLArray bornRadii;
@@ -1223,6 +1235,13 @@ public:
      * @param innerContext   the context created by the CustomCVForce for computing collective variables
      */
     void copyState(ContextImpl& context, ContextImpl& innerContext);
+    /**
+     * Copy changed parameters over to a context.
+     *
+     * @param context    the context to copy parameters to
+     * @param force      the CustomCVForce to copy the parameters from
+     */
+    void copyParametersToContext(ContextImpl& context, const CustomCVForce& force);
 private:
     class ReorderListener;
     OpenCLContext& cl;
@@ -1484,9 +1503,8 @@ class OpenCLIntegrateCustomStepKernel : public IntegrateCustomStepKernel {
 public:
     enum GlobalTargetType {DT, VARIABLE, PARAMETER};
     OpenCLIntegrateCustomStepKernel(std::string name, const Platform& platform, OpenCLContext& cl) : IntegrateCustomStepKernel(name, platform), cl(cl),
-            hasInitializedKernels(false), localValuesAreCurrent(false), perDofValues(NULL), needsEnergyParamDerivs(false) {
+            hasInitializedKernels(false), needsEnergyParamDerivs(false) {
     }
-    ~OpenCLIntegrateCustomStepKernel();
     /**
      * Initialize the kernel.
      * 
@@ -1550,7 +1568,7 @@ private:
     class ReorderListener;
     class GlobalTarget;
     class DerivFunction;
-    std::string createPerDofComputation(const std::string& variable, const Lepton::ParsedExpression& expr, int component, CustomIntegrator& integrator,
+    std::string createPerDofComputation(const std::string& variable, const Lepton::ParsedExpression& expr, CustomIntegrator& integrator,
         const std::string& forceName, const std::string& energyName, std::vector<const TabulatedFunction*>& functions,
         std::vector<std::pair<std::string, std::string> >& functionNames);
     void prepareForComputation(ContextImpl& context, CustomIntegrator& integrator, bool& forcesAreValid);
@@ -1563,27 +1581,25 @@ private:
     double energy;
     float energyFloat;
     int numGlobalVariables, sumWorkGroupSize;
-    bool hasInitializedKernels, deviceValuesAreCurrent, deviceGlobalsAreCurrent, modifiesParameters, keNeedsForce, hasAnyConstraints, needsEnergyParamDerivs;
-    mutable bool localValuesAreCurrent;
+    bool hasInitializedKernels, deviceGlobalsAreCurrent, modifiesParameters, keNeedsForce, hasAnyConstraints, needsEnergyParamDerivs;
+    std::vector<bool> deviceValuesAreCurrent;
+    mutable std::vector<bool> localValuesAreCurrent;
     OpenCLArray globalValues;
     OpenCLArray sumBuffer;
     OpenCLArray summedValue;
     OpenCLArray uniformRandoms;
     OpenCLArray randomSeed;
     OpenCLArray perDofEnergyParamDerivs;
-    std::vector<OpenCLArray> tabulatedFunctions;
+    std::vector<OpenCLArray> tabulatedFunctions, perDofValues;
     std::map<int, double> savedEnergy;
     std::map<int, OpenCLArray> savedForces;
     std::set<int> validSavedForces;
-    OpenCLParameterSet* perDofValues;
-    mutable std::vector<std::vector<cl_float> > localPerDofValuesFloat;
-    mutable std::vector<std::vector<cl_double> > localPerDofValuesDouble;
+    mutable std::vector<std::vector<mm_float4> > localPerDofValuesFloat;
+    mutable std::vector<std::vector<mm_double4> > localPerDofValuesDouble;
     std::map<std::string, double> energyParamDerivs;
     std::vector<std::string> perDofEnergyParamDerivNames;
-    std::vector<cl_float> localPerDofEnergyParamDerivsFloat;
-    std::vector<cl_double> localPerDofEnergyParamDerivsDouble;
-    std::vector<float> globalValuesFloat;
-    std::vector<double> globalValuesDouble;
+    std::vector<cl_double> localPerDofEnergyParamDerivs;
+    std::vector<double> localGlobalValues;
     std::vector<double> initialGlobalVariables;
     std::vector<std::vector<cl::Kernel> > kernels;
     cl::Kernel randomKernel, kineticEnergyKernel, sumKineticEnergyKernel;

@@ -609,7 +609,7 @@ private:
 class CudaCalcNonbondedForceKernel : public CalcNonbondedForceKernel {
 public:
     CudaCalcNonbondedForceKernel(std::string name, const Platform& platform, CudaContext& cu, const System& system) : CalcNonbondedForceKernel(name, platform),
-            cu(cu), hasInitializedFFT(false), sort(NULL), dispersionFft(NULL), fft(NULL), pmeio(NULL) {
+            cu(cu), hasInitializedFFT(false), sort(NULL), dispersionFft(NULL), fft(NULL), pmeio(NULL), usePmeStream(false) {
     }
     ~CudaCalcNonbondedForceKernel();
     /**
@@ -675,31 +675,39 @@ private:
     CudaContext& cu;
     ForceInfo* info;
     bool hasInitializedFFT;
+    CudaArray charges;
     CudaArray sigmaEpsilon;
     CudaArray exceptionParams;
+    CudaArray baseParticleParams;
+    CudaArray baseExceptionParams;
+    CudaArray particleParamOffsets;
+    CudaArray exceptionParamOffsets;
+    CudaArray particleOffsetIndices;
+    CudaArray exceptionOffsetIndices;
+    CudaArray globalParams;
     CudaArray cosSinSums;
-    CudaArray directPmeGrid;
-    CudaArray reciprocalPmeGrid;
+    CudaArray pmeGrid1;
+    CudaArray pmeGrid2;
     CudaArray pmeBsplineModuliX;
     CudaArray pmeBsplineModuliY;
     CudaArray pmeBsplineModuliZ;
     CudaArray pmeDispersionBsplineModuliX;
     CudaArray pmeDispersionBsplineModuliY;
     CudaArray pmeDispersionBsplineModuliZ;
-    CudaArray pmeAtomRange;
     CudaArray pmeAtomGridIndex;
     CudaArray pmeEnergyBuffer;
     CudaSort* sort;
     Kernel cpuPme;
     PmeIO* pmeio;
     CUstream pmeStream;
-    CUevent pmeSyncEvent;
+    CUevent pmeSyncEvent, paramsSyncEvent;
     CudaFFT3D* fft;
     cufftHandle fftForward;
     cufftHandle fftBackward;
     CudaFFT3D* dispersionFft;
     cufftHandle dispersionFftForward;
     cufftHandle dispersionFftBackward;
+    CUfunction computeParamsKernel;
     CUfunction ewaldSumsKernel;
     CUfunction ewaldForcesKernel;
     CUfunction pmeGridIndexKernel;
@@ -715,11 +723,13 @@ private:
     CUfunction pmeInterpolateForceKernel;
     CUfunction pmeInterpolateDispersionForceKernel;
     std::vector<std::pair<int, int> > exceptionAtoms;
+    std::vector<std::string> paramNames;
+    std::vector<double> paramValues;
     double ewaldSelfEnergy, dispersionCoefficient, alpha, dispersionAlpha;
     int interpolateForceThreads;
     int gridSizeX, gridSizeY, gridSizeZ;
     int dispersionGridSizeX, dispersionGridSizeY, dispersionGridSizeZ;
-    bool hasCoulomb, hasLJ, usePmeStream, useCudaFFT, doLJPME;
+    bool hasCoulomb, hasLJ, usePmeStream, useCudaFFT, doLJPME, usePosqCharges, recomputeParams, hasOffsets;
     NonbondedMethod nonbondedMethod;
     static const int PmeOrder = 5;
 };
@@ -815,6 +825,7 @@ private:
     int maxTiles;
     CudaContext& cu;
     ForceInfo* info;
+    CudaArray charges;
     CudaArray params;
     CudaArray bornSum;
     CudaArray bornRadii;
@@ -1247,6 +1258,13 @@ public:
      * @param innerContext   the context created by the CustomCVForce for computing collective variables
      */
     void copyState(ContextImpl& context, ContextImpl& innerContext);
+    /**
+     * Copy changed parameters over to a context.
+     *
+     * @param context    the context to copy parameters to
+     * @param force      the CustomCVForce to copy the parameters from
+     */
+    void copyParametersToContext(ContextImpl& context, const CustomCVForce& force);
 private:
     class ReorderListener;
     CudaContext& cu;
@@ -1495,9 +1513,8 @@ class CudaIntegrateCustomStepKernel : public IntegrateCustomStepKernel {
 public:
     enum GlobalTargetType {DT, VARIABLE, PARAMETER};
     CudaIntegrateCustomStepKernel(std::string name, const Platform& platform, CudaContext& cu) : IntegrateCustomStepKernel(name, platform), cu(cu),
-            hasInitializedKernels(false), localValuesAreCurrent(false), perDofValues(NULL), needsEnergyParamDerivs(false) {
+            hasInitializedKernels(false), needsEnergyParamDerivs(false) {
     }
-    ~CudaIntegrateCustomStepKernel();
     /**
      * Initialize the kernel.
      * 
@@ -1561,7 +1578,7 @@ private:
     class ReorderListener;
     class GlobalTarget;
     class DerivFunction;
-    std::string createPerDofComputation(const std::string& variable, const Lepton::ParsedExpression& expr, int component, CustomIntegrator& integrator,
+    std::string createPerDofComputation(const std::string& variable, const Lepton::ParsedExpression& expr, CustomIntegrator& integrator,
         const std::string& forceName, const std::string& energyName, std::vector<const TabulatedFunction*>& functions,
         std::vector<std::pair<std::string, std::string> >& functionNames);
     void prepareForComputation(ContextImpl& context, CustomIntegrator& integrator, bool& forcesAreValid);
@@ -1574,27 +1591,25 @@ private:
     double energy;
     float energyFloat;
     int numGlobalVariables, sumWorkGroupSize;
-    bool hasInitializedKernels, deviceValuesAreCurrent, deviceGlobalsAreCurrent, modifiesParameters, keNeedsForce, hasAnyConstraints, needsEnergyParamDerivs;
-    mutable bool localValuesAreCurrent;
+    bool hasInitializedKernels, deviceGlobalsAreCurrent, modifiesParameters, keNeedsForce, hasAnyConstraints, needsEnergyParamDerivs;
+    std::vector<bool> deviceValuesAreCurrent;
+    mutable std::vector<bool> localValuesAreCurrent; 
     CudaArray globalValues;
     CudaArray sumBuffer;
     CudaArray summedValue;
     CudaArray uniformRandoms;
     CudaArray randomSeed;
     CudaArray perDofEnergyParamDerivs;
-    std::vector<CudaArray> tabulatedFunctions;
+    std::vector<CudaArray> tabulatedFunctions, perDofValues;
     std::map<int, double> savedEnergy;
     std::map<int, CudaArray> savedForces;
     std::set<int> validSavedForces;
-    CudaParameterSet* perDofValues;
-    mutable std::vector<std::vector<float> > localPerDofValuesFloat;
-    mutable std::vector<std::vector<double> > localPerDofValuesDouble;
+    mutable std::vector<std::vector<float4> > localPerDofValuesFloat;
+    mutable std::vector<std::vector<double4> > localPerDofValuesDouble;
     std::map<std::string, double> energyParamDerivs;
     std::vector<std::string> perDofEnergyParamDerivNames;
-    std::vector<float> localPerDofEnergyParamDerivsFloat;
-    std::vector<double> localPerDofEnergyParamDerivsDouble;
-    std::vector<float> globalValuesFloat;
-    std::vector<double> globalValuesDouble;
+    std::vector<double> localPerDofEnergyParamDerivs;
+    std::vector<double> localGlobalValues;
     std::vector<double> initialGlobalVariables;
     std::vector<std::vector<CUfunction> > kernels;
     std::vector<std::vector<std::vector<void*> > > kernelArgs;

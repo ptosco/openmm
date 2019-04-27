@@ -68,7 +68,7 @@ static void CL_CALLBACK errorCallback(const char* errinfo, const void* private_i
 }
 
 OpenCLContext::OpenCLContext(const System& system, int platformIndex, int deviceIndex, const string& precision, OpenCLPlatform::PlatformData& platformData, OpenCLContext* originalContext) :
-        system(system), time(0.0), platformData(platformData), stepCount(0), computeForceCount(0), stepsSinceReorder(99999), atomsWereReordered(false),
+        system(system), time(0.0), platformData(platformData), stepCount(0), computeForceCount(0), stepsSinceReorder(99999), atomsWereReordered(false), hasAssignedPosqCharges(false),
         integration(NULL), expression(NULL), bonded(NULL), nonbonded(NULL), thread(NULL) {
     if (precision == "single") {
         useDoublePrecision = false;
@@ -295,6 +295,11 @@ OpenCLContext::OpenCLContext(const System& system, int platformIndex, int device
             compilationDefines["convert_mixed4"] = "convert_float4";
         }
         posCellOffsets.resize(paddedNumAtoms, mm_int4(0, 0, 0, 0));
+        atomIndexDevice.initialize<cl_int>(*this, paddedNumAtoms, "atomIndexDevice");
+        atomIndex.resize(paddedNumAtoms);
+        for (int i = 0; i < paddedNumAtoms; ++i)
+            atomIndex[i] = i;
+        atomIndexDevice.upload(atomIndex);
     }
     catch (cl::Error err) {
         std::stringstream str;
@@ -494,11 +499,6 @@ void OpenCLContext::initialize() {
             ((mm_float4*) pinnedMemory)[i] = mm_float4(0.0f, 0.0f, 0.0f, mass == 0.0 ? 0.0f : (cl_float) (1.0/mass));
     }
     velm.upload(pinnedMemory);
-    atomIndexDevice.initialize<cl_int>(*this, paddedNumAtoms, "atomIndexDevice");
-    atomIndex.resize(paddedNumAtoms);
-    for (int i = 0; i < paddedNumAtoms; ++i)
-        atomIndex[i] = i;
-    atomIndexDevice.upload(atomIndex);
     findMoleculeGroups();
     nonbonded->initialize(system);
 }
@@ -769,23 +769,21 @@ double OpenCLContext::reduceEnergy() {
 void OpenCLContext::setCharges(const vector<double>& charges) {
     if (!chargeBuffer.isInitialized())
         chargeBuffer.initialize(*this, numAtoms, useDoublePrecision ? sizeof(double) : sizeof(float), "chargeBuffer");
-    if (getUseDoublePrecision()) {
-        double* c = (double*) getPinnedBuffer();
-        for (int i = 0; i < charges.size(); i++)
-            c[i] = charges[i];
-        chargeBuffer.upload(c);
-    }
-    else {
-        float* c = (float*) getPinnedBuffer();
-        for (int i = 0; i < charges.size(); i++)
-            c[i] = (float) charges[i];
-        chargeBuffer.upload(c);
-    }
+    vector<double> c(numAtoms);
+    for (int i = 0; i < numAtoms; i++)
+        c[i] = charges[i];
+    chargeBuffer.upload(c, true, true);
     setChargesKernel.setArg<cl::Buffer>(0, chargeBuffer.getDeviceBuffer());
     setChargesKernel.setArg<cl::Buffer>(1, posq.getDeviceBuffer());
     setChargesKernel.setArg<cl::Buffer>(2, atomIndexDevice.getDeviceBuffer());
     setChargesKernel.setArg<cl_int>(3, numAtoms);
     executeKernel(setChargesKernel, numAtoms);
+}
+
+bool OpenCLContext::requestPosqCharges() {
+    bool allow = !hasAssignedPosqCharges;
+    hasAssignedPosqCharges = true;
+    return allow;
 }
 
 /**
@@ -796,32 +794,33 @@ public:
     VirtualSiteInfo(const System& system) : OpenCLForceInfo(0) {
         for (int i = 0; i < system.getNumParticles(); i++) {
             if (system.isVirtualSite(i)) {
-                siteTypes.push_back(&typeid(system.getVirtualSite(i)));
+                const VirtualSite& vsite = system.getVirtualSite(i);
+                siteTypes.push_back(&typeid(vsite));
                 vector<int> particles;
                 particles.push_back(i);
-                for (int j = 0; j < system.getVirtualSite(i).getNumParticles(); j++)
-                    particles.push_back(system.getVirtualSite(i).getParticle(j));
+                for (int j = 0; j < vsite.getNumParticles(); j++)
+                    particles.push_back(vsite.getParticle(j));
                 siteParticles.push_back(particles);
                 vector<double> weights;
-                if (dynamic_cast<const TwoParticleAverageSite*>(&system.getVirtualSite(i)) != NULL) {
+                if (dynamic_cast<const TwoParticleAverageSite*>(&vsite) != NULL) {
                     // A two particle average.
 
-                    const TwoParticleAverageSite& site = dynamic_cast<const TwoParticleAverageSite&>(system.getVirtualSite(i));
+                    const TwoParticleAverageSite& site = dynamic_cast<const TwoParticleAverageSite&>(vsite);
                     weights.push_back(site.getWeight(0));
                     weights.push_back(site.getWeight(1));
                 }
-                else if (dynamic_cast<const ThreeParticleAverageSite*>(&system.getVirtualSite(i)) != NULL) {
+                else if (dynamic_cast<const ThreeParticleAverageSite*>(&vsite) != NULL) {
                     // A three particle average.
 
-                    const ThreeParticleAverageSite& site = dynamic_cast<const ThreeParticleAverageSite&>(system.getVirtualSite(i));
+                    const ThreeParticleAverageSite& site = dynamic_cast<const ThreeParticleAverageSite&>(vsite);
                     weights.push_back(site.getWeight(0));
                     weights.push_back(site.getWeight(1));
                     weights.push_back(site.getWeight(2));
                 }
-                else if (dynamic_cast<const OutOfPlaneSite*>(&system.getVirtualSite(i)) != NULL) {
+                else if (dynamic_cast<const OutOfPlaneSite*>(&vsite) != NULL) {
                     // An out of plane site.
 
-                    const OutOfPlaneSite& site = dynamic_cast<const OutOfPlaneSite&>(system.getVirtualSite(i));
+                    const OutOfPlaneSite& site = dynamic_cast<const OutOfPlaneSite&>(vsite);
                     weights.push_back(site.getWeight12());
                     weights.push_back(site.getWeight13());
                     weights.push_back(site.getWeightCross());
@@ -1006,33 +1005,39 @@ bool OpenCLContext::invalidateMolecules(OpenCLForceInfo* force) {
     for (int i = 0; i < forces.size(); i++)
         if (forces[i] == force)
             forceIndex = i;
-    for (int group = 0; valid && group < (int) moleculeGroups.size(); group++) {
-        MoleculeGroup& mol = moleculeGroups[group];
-        vector<int>& instances = mol.instances;
-        vector<int>& offsets = mol.offsets;
-        vector<int>& atoms = mol.atoms;
-        int numMolecules = instances.size();
-        Molecule& m1 = molecules[instances[0]];
-        int offset1 = offsets[0];
-        for (int j = 1; valid && j < numMolecules; j++) {
-            // See if the atoms are identical.
+    getPlatformData().threads.execute([&] (ThreadPool& threads, int threadIndex) {
+        for (int group = 0; valid && group < (int) moleculeGroups.size(); group++) {
+            MoleculeGroup& mol = moleculeGroups[group];
+            vector<int>& instances = mol.instances;
+            vector<int>& offsets = mol.offsets;
+            vector<int>& atoms = mol.atoms;
+            int numMolecules = instances.size();
+            Molecule& m1 = molecules[instances[0]];
+            int offset1 = offsets[0];
+            int numThreads = threads.getNumThreads();
+            int start = max(1, threadIndex*numMolecules/numThreads);
+            int end = (threadIndex+1)*numMolecules/numThreads;
+            for (int j = start; j < end; j++) {
+                // See if the atoms are identical.
 
-            Molecule& m2 = molecules[instances[j]];
-            int offset2 = offsets[j];
-            for (int i = 0; i < (int) atoms.size() && valid; i++) {
-                if (!force->areParticlesIdentical(atoms[i]+offset1, atoms[i]+offset2))
-                    valid = false;
-            }
-
-            // See if the force groups are identical.
-
-            if (valid && forceIndex > -1) {
-                for (int k = 0; k < (int) m1.groups[forceIndex].size() && valid; k++)
-                    if (!force->areGroupsIdentical(m1.groups[forceIndex][k], m2.groups[forceIndex][k]))
+                Molecule& m2 = molecules[instances[j]];
+                int offset2 = offsets[j];
+                for (int i = 0; i < (int) atoms.size(); i++) {
+                    if (!force->areParticlesIdentical(atoms[i]+offset1, atoms[i]+offset2))
                         valid = false;
+                }
+
+                // See if the force groups are identical.
+
+                if (valid && forceIndex > -1) {
+                    for (int k = 0; k < (int) m1.groups[forceIndex].size(); k++)
+                        if (!force->areGroupsIdentical(m1.groups[forceIndex][k], m2.groups[forceIndex][k]))
+                            valid = false;
+                }
             }
         }
-    }
+    });
+    getPlatformData().threads.waitForThreads();
     if (valid)
         return false;
 

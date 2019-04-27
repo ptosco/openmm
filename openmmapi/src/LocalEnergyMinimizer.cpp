@@ -152,7 +152,7 @@ int LocalEnergyMinimizer::minimize(Context& context, double tolerance, int maxIt
     int numParticles = system.getNumParticles();
     double constraintTol = context.getIntegrator().getConstraintTolerance();
     double workingConstraintTol = std::max(1e-4, constraintTol);
-    double k = tolerance/workingConstraintTol;
+    double k = 100/workingConstraintTol;
     lbfgsfloatval_t *x = lbfgs_malloc(numParticles*3);
     int ret = 0;
     if (x == NULL)

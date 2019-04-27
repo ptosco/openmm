@@ -9,7 +9,7 @@
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2008-2016 Stanford University and the Authors.      *
+ * Portions copyright (c) 2008-2018 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -980,6 +980,13 @@ public:
      * @param innerContext   the context created by the CustomCVForce for computing collective variables
      */
     virtual void copyState(ContextImpl& context, ContextImpl& innerContext) = 0;
+    /**
+     * Copy changed parameters over to a context.
+     *
+     * @param context    the context to copy parameters to
+     * @param force      the CustomCVForce to copy the parameters from
+     */
+    virtual void copyParametersToContext(ContextImpl& context, const CustomCVForce& force) = 0;
 };
 
 /**
@@ -1429,7 +1436,6 @@ public:
  */
 class CalcDispersionPmeReciprocalForceKernel : public KernelImpl {
 public:
-    class IO;
     static std::string Name() {
         return "CalcDispersionPmeReciprocalForce";
     }
@@ -1453,14 +1459,14 @@ public:
      * @param periodicBoxVectors  the vectors defining the periodic box (measured in nm)
      * @param includeEnergy       true if potential energy should be computed
      */
-    virtual void beginComputation(IO& io, const Vec3* periodicBoxVectors, bool includeEnergy) = 0;
+    virtual void beginComputation(CalcPmeReciprocalForceKernel::IO& io, const Vec3* periodicBoxVectors, bool includeEnergy) = 0;
     /**
      * Finish computing the force and energy.
      * 
      * @param io   an object that coordinates data transfer
      * @return the potential energy due to the PME reciprocal space interactions
      */
-    virtual double finishComputation(IO& io) = 0;
+    virtual double finishComputation(CalcPmeReciprocalForceKernel::IO& io) = 0;
     /**
      * Get the parameters being used for PME.
      * 
